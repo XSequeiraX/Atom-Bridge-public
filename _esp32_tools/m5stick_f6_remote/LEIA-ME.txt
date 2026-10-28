@@ -1,0 +1,69 @@
+m5stick_f6_remote: comando de bolso do Zoom F6 na M5Stack M5StickS3 (REC e STOP, com bloqueio; sem PLAY)
+
+SO funciona com o S3 do F6 em modo "F6 standalone" (firmware gopro_gw 21 ou mais novo). A M5StickS3 liga-se ao Wi-Fi F6-REMOTE-xxxx
+desse S3 e fala a API da pagina do telemovel: GET /api/f6/lite (estado, 4 vezes por segundo) e POST /api/f6/press (REC 24, STOP 22).
+
+GRAVAR (PC com python 3 e  pip install esptool ; ficheiros em firmware/m5stick/, comando em firmware/gravar.py)
+  A primeira vez, com o nome do AP (o que aparece na lista de Wi-Fi do telemovel: F6-REMOTE-xxxx):
+    python gravar.py COM7 --m5stick --ssid F6-REMOTE-1A2B
+  Pergunta a palavra-passe do AP no terminal (a que se escolheu ao passar o S3 a "F6 standalone"; 8 a 63 caracteres), sem a mostrar.
+  Grava a imagem completa e, a seguir, o nome e a palavra-passe numa particao propria ("cfg"): nao estao no codigo nem no .bin.
+  Mudar so o AP:           python gravar.py COM7 --m5stick --so-wifi --ssid OUTRO
+  Actualizar o programa:   python gravar.py COM7 --m5stick      (o Wi-Fi guardado fica)
+  Modo de gravacao da M5StickS3 (guias da M5: https://docs.m5stack.com/en/arduino/m5sticks3/program): ligada por USB, premir o botao de
+  reset do lado cerca de 2 s ate o LED verde piscar, e largar. Se o esptool nao a encontrar, repetir isto e conferir a porta.
+
+  Pela consola do Atom (sem PC): ESC > DEVICES > M5STICK (F6 REMOTE) > Flash a M5StickS3 (ou Update its program / Change its Wi-Fi only), com a
+  M5StickS3 ligada por USB ao Atom. Usa as copias de atom/app/fw/m5stick/ (iguais as de firmware/m5stick/).
+
+COMO SE USA
+  B (botao lateral)  3 toques seguidos (cada um a menos de 1,5 s do anterior) desbloqueiam o botao A durante 10 s (barra a esvaziar no
+                     ecra). Um toque em B com o A desbloqueado volta a bloquear.
+  A (botao da frente) desbloqueado: SEGURAR. Se o F6 nao grava, segura 0,7 s e envia REC; se grava, segura 0,45 s e envia STOP. A decisao
+                     vem do estado REAL que o F6 deu ha menos de 1,5 s. Se o estado nao e conhecido ou mudou enquanto seguravas, nao envia.
+  Enviado o comando, o A volta a bloquear sozinho: um desbloqueio, um comando.
+  O estado so se da como feito quando o F6 o confirma (REC OK / STOP OK). Se o F6 nao confirma em 3 s: "F6 did NOT confirm". Sem
+  resposta do S3 (Wi-Fi caiu, pedido perdido): STATE UNKNOWN, amarelo a piscar, "LOOK AT THE F6", ate a ligacao voltar e o estado
+  verdadeiro chegar ("link back: F6 IS RECORDING" ou "is not recording"). Se a ligacao se perde a gravar: "was REC: LOOK AT THE F6".
+  Trancado, cada toque no A passa a pagina seguinte (1/3, 2/3, 3/3, e volta a 1); nunca envia nada. O estado (REC, READY ...) e o cadeado ficam no
+  topo nas tres paginas; a linha por baixo diz a pagina ("A: page 2/3"). Letra: so a grande (26 px) e a media (16 px), nunca a minuscula.
+  Nao ha botao PLAY (de proposito). Sem bip por omissao (um bip pode ficar gravado nos microfones): BEEPS no .ino.
+
+ECRA (horizontal 240x135), TRES PAGINAS (A trancado: cada toque passa a seguinte)
+  Topo, sempre: estado grande (REC mm:ss a vermelho, READY a verde, NO TRACK, F6 NOT LINKED, NO WIFI, NO LINK TO S3, STATE UNKNOWN), cadeado
+  (fechado / aberto a verde) e, depois do primeiro toque em B, os 3 pontos dos toques.
+  1/3  As 6 pistas e a saida L/R: o medidor de 12 segmentos (verde, amarelo a partir do 10, vermelho no ultimo) com o pico em branco; a pista
+       armada tem o numero a verde, as outras a cinzento (a mesma logica da pagina do telemovel). Rodape: Wi-Fi (barras e dBm) e bateria da M5.
+  2/3  Wi-Fi, em letra grande: o nome da rede, os dBm com as barras (verde bom, amarelo razoavel, vermelho fraco), a qualidade, o canal e o IP; sem
+       ligacao diz porque ("not found", "wrong password", "searching") e o endereco do S3.
+  3/3  Bateria, em letra grande: a da M5StickS3 (a vermelho a 15% ou menos, amarelo a 30% ou menos, "charging" a carregar) e se o S3
+       responde (ms do ultimo pedido, ou ha quantos segundos esta calado).
+  O ecra so reenvia ao painel as linhas que mudaram (e nada se nada mudou): e o que evita o flicker. Um pedido atrasado ate 3 s nao faz o estado
+  saltar entre READY e NO LINK (a gravar, avisa a 1,5 s).
+  Como ficam as paginas (pre-visualizacao feita no PC com o codigo e os tipos de letra verdadeiros): testes/m5stick_preview/paginas.png
+
+BATERIA DO F6
+  O stick NAO mostra a bateria do F6 (ate a v5 havia um "F6 --" que nunca mudava, e foi retirado): o FRC-8 nao traz o nivel. Os SysEx que se
+  suspeitava (63 10, 63 11, 63 13) sao definicoes (tensao nominal e de corte, tipo de bateria, brilho do LED), como se ve na issue #2 do emulador
+  e em docs/FRC-8-protocolo.pdf. O nivel so existe pelo Bluetooth (mensagem 88 da serie F, via BTA-1), que nao e o caminho de hoje (issue #26).
+
+NAO FOI TESTADO NA PLACA (compilado e testado no PC)
+  Compilado com o core esp32 3.1.1 (placa generica esp32s3) e M5Unified 0.2.27, M5GFX 0.2.34, M5PM1 1.0.7, porque o pacote de placas da M5
+  nao estava acessivel de onde se compilou; a M5 documenta o pacote M5Stack >= 3.2.5 com a placa M5StickS3. O M5Unified reconhece a
+  placa sozinho. Testado no PC com o codigo do firmware: a leitura da resposta do S3 e da particao cfg (18 casos). Por testar na placa, por
+  esta ordem, com o F6 em cima da mesa e SEM gravar nada importante:
+    1. liga e mostra o ecra (orientacao, cores; se ficar preto, recompilar com o pacote M5Stack >= 3.2.5 e a placa M5StickS3);
+    2. liga ao Wi-Fi do S3 (barras e dBm) e mostra READY / pistas armadas / medidores a mexer;
+    3. os dois botoes: B tres vezes desbloqueia, A segurar envia (A = frente, B = lateral: se vierem trocados, trocar BtnA e BtnB no .ino);
+    4. REC e STOP no F6 (o ecra confirma); depois desligar o Wi-Fi do S3 a meio e ver o STATE UNKNOWN;
+    5. a bateria da M5StickS3 (a leitura em %) e a duracao: nao medida (250 mAh, ecra e Wi-Fi ligados).
+       A % da M5 vem da tensao (3300..4150 mV = 0..100 %, ~8,5 mV por 1 %); com o Wi-Fi a transmitir a tensao cai e a % crua oscilava 10 % ou mais.
+       Desde a v4 usa a mediana de ~20 s e so desce a descarregar / so sobe a carregar (1 % de cada vez), por isso demora uns segundos a assentar.
+       Desde a v5, nos primeiros ~20 s (ou depois de ligar/desligar o USB, so contado se durar 3 s) a % segue a mediana nos dois sentidos, para uma
+       leitura baixa do arranque nao ficar como piso, e o carregador a ligar e desligar perto dos 100 % nao faz piscar o "--".
+
+COMPILAR
+  arduino-cli compile --fqbn "esp32:esp32:esp32s3:CDCOnBoot=cdc,USBMode=hwcdc,FlashSize=8M,PartitionScheme=default_8MB,FlashMode=dio,PSRAM=disabled"
+    --export-binaries _esp32_tools/m5stick_f6_remote
+  A pasta tem o partitions.csv (app em 0x10000, "cfg" em 0x310000); o arduino-esp32 usa-o em vez do esquema escolhido. Bibliotecas: M5Unified,
+  M5GFX, M5PM1 (github.com/m5stack). A pasta tem de se chamar como o .ino sem a extensao (m5stick_f6_remote).

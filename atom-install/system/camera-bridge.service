@@ -1,0 +1,38 @@
+[Unit]
+Description=Camera Bridge
+After=bluetooth.target network.target
+Wants=bluetooth.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/camera-bridge
+# Codigo estragado (corte de energia a meio de uma actualizacao): repoe a ultima copia boa antes de arrancar.
+ExecStartPre=-/usr/local/bin/bridge-repor-codigo.sh
+ExecStart=/usr/bin/python3 /opt/camera-bridge/bridge.py
+Restart=always
+RestartSec=5
+
+# Catch a WEDGED process, not just a dead one. The bridge pings systemd every
+# 10s from its watchdog thread; three missed pings and it gets killed and
+# restarted. Restart=always alone leaves a hung unit "active" for ever.
+NotifyAccess=main
+WatchdogSec=45
+
+# This is the interactive control surface for a live shoot: a late REC is a
+# lost take. Give it priority over background work on the box (Claude Code,
+# updates, ...) instead of the Nice=10 it used to run at, which put it below
+# everything else.
+Nice=-5
+IOSchedulingClass=best-effort
+IOSchedulingPriority=2
+
+# Sem MemoryMax= de proposito: um limite de memoria mata o bridge a meio de uma
+# take, e isso e pior do que o Atom ficar lento. O crescimento vigia-se pelo
+# health check (memoria do processo) em vez de se cortar.
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

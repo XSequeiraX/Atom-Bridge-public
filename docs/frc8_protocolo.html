@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<title>Protocolo FRC-8 do Zoom F6</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 20mm 16mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "DejaVu Sans", "Liberation Sans", Arial, sans-serif; font-size: 9.3pt; line-height: 1.38; color: #1b1f24; }
+  h1 { font-size: 21pt; margin: 0 0 2pt; letter-spacing: -0.3pt; }
+  .sub { color: #57606a; font-size: 10.5pt; margin-bottom: 10pt; }
+  h2 { font-size: 13.2pt; margin: 14pt 0 4pt; padding-bottom: 2pt; border-bottom: 1.5px solid #0969da; color: #0b3d91; break-after: avoid; }
+  h3 { font-size: 10.8pt; margin: 11pt 0 3pt; color: #24292f; break-after: avoid; }
+  p { margin: 4pt 0; }
+  ul, ol { margin: 3pt 0 3pt 15pt; padding: 0; }
+  li { margin: 1.5pt 0; }
+  code, .hex { font-family: "DejaVu Sans Mono", "Liberation Mono", monospace; font-size: 8.6pt; }
+  code { background: #eef1f5; padding: 0 2.5pt; border-radius: 2pt; }
+  pre { font-family: "DejaVu Sans Mono", "Liberation Mono", monospace; font-size: 8.3pt; background: #f4f6f8; border: 1px solid #d0d7de;
+        border-left: 3px solid #0969da; padding: 5pt 7pt; margin: 5pt 0; white-space: pre-wrap; word-break: break-all; break-inside: avoid; }
+  table { border-collapse: collapse; width: 100%; margin: 5pt 0 8pt; font-size: 8.9pt; break-inside: auto; }
+  th { background: #0b3d91; color: #fff; text-align: left; padding: 3pt 5pt; font-weight: 600; }
+  td { border: 1px solid #d0d7de; padding: 3pt 5pt; vertical-align: top; }
+  tr { break-inside: avoid; }
+  tr:first-child { break-after: avoid; }
+  tr:nth-child(even) td { background: #f7f9fb; }
+  .ok { color: #1a7f37; font-weight: 600; }
+  .tb { color: #9a6700; font-weight: 600; }
+  .no { color: #cf222e; font-weight: 600; }
+  .box { border: 1px solid #d0d7de; border-radius: 4pt; padding: 5pt 8pt; margin: 6pt 0; background: #fafbfc; break-inside: avoid; }
+  .warn { border-left: 4px solid #cf222e; background: #fff5f5; }
+  .note { border-left: 4px solid #9a6700; background: #fffbea; }
+  .cover { margin-bottom: 8pt; }
+  .meta { font-size: 8.6pt; color: #57606a; }
+  .small { font-size: 8.6pt; color: #57606a; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <h1>Protocolo FRC-8 do Zoom F6</h1>
+  <div class="sub">Controlo do gravador por USB-MIDI: ligação, mensagens, estado e limites conhecidos</div>
+  <div class="meta">Atom-Bridge · documento de 2026-10-19/20 · lido do código do repositório (<code>atom/app/frc8.py</code>, <code>_esp32_tools/gopro_gw/gopro_gw.ino</code>, <code>testes/f6_usb_ltc/f6_frc.py</code>) e das capturas feitas com o F6 real</div>
+</div>
+
+<div class="box note">
+  <b>Como ler este documento.</b> Cada facto traz a sua confiança:
+  <span class="ok">confirmado</span> = visto no F6 real ou usado em produção;
+  <span class="tb">por confirmar</span> = vem do protocolo do emulador público e o F6 não foi testado;
+  <span class="no">não funciona</span> = testado e sem efeito. Os valores são hexadecimais, salvo indicação.
+</div>
+
+<h2>1. O que é o FRC-8</h2>
+<p>O FRC-8 é o comando de mesa por USB da Zoom para a série F. O F6, com <b>MENU &gt; SYSTEM &gt; USB &gt; FRC-8 &gt; connect</b>, deixa de ser um leitor de cartões e apresenta-se ao computador como um dispositivo USB-MIDI. Quem manda é o <b>anfitrião</b> (o FRC-8 verdadeiro; aqui, o Atom por cabo, ou o gateway S3 no modo F6). O F6 só responde e alimenta a linha de 5 V.</p>
+<table>
+  <tr><th style="width:23%">Dado</th><th>Valor</th><th style="width:15%">Confiança</th></tr>
+  <tr><td>Identificação USB</td><td><code>1686:0351</code> (Zoom), nome ALSA "F Series MIDI Interface"</td><td class="ok">confirmado</td></tr>
+  <tr><td>Interface</td><td>classe 1 (áudio), subclasse 3 (MIDIStreaming), pontos finais de bloco (bulk) de entrada e saída</td><td class="ok">confirmado (S3)</td></tr>
+  <tr><td>Pacotes</td><td>USB-MIDI de 4 bytes, cabo 0: <code>[CIN][b1][b2][b3]</code>. Mensagens de canal: CIN = estado &gt;&gt; 4. SysEx: CIN 4 (continua), 5, 6, 7 (termina com 1, 2 ou 3 bytes). Tempo real (<code>FE</code>): CIN F</td><td class="ok">confirmado (S3)</td></tr>
+  <tr><td>Alimentação</td><td>O F6 alimenta a linha. Com o cabo já ligado a um anfitrião que também alimenta, o F6 mostra "Error!"</td><td class="ok">confirmado</td></tr>
+  <tr><td>Velocidade</td><td>Com um PC, um F8n Pro enumera a alta velocidade (480 Mbit/s) com pontos finais de 512 bytes, "Bus Powered 500 mA" (issue #2 do emulador). O S3 só liga a full speed (12 Mbit/s) e funciona assim com o F6</td><td class="ok">confirmado no S3</td></tr>
+  <tr><td>Pistas</td><td>O protocolo é o do FRC-8 de 8 pistas; o F6 tem 6 entradas (mais a saída L/R)</td><td class="ok">confirmado</td></tr>
+</table>
+
+<h2>2. Montagem e ordem de ligação</h2>
+<table>
+  <tr><th style="width:23%">Anfitrião</th><th>Ordem que funciona</th><th style="width:15%">Confiança</th></tr>
+  <tr><td>Atom ou PC (cabo USB-A para USB-C)</td><td>1) arrancar o programa (<code>frc8.py</code> ou <code>f6_frc.py</code>), 2) no F6 carregar em <b>connect com o cabo DESLIGADO</b>, 3) só então ligar o cabo. Com o cabo já ligado, o F6 encontra a corrente do Atom na linha e dá "Error!". Se a ligação cair, o programa volta a esperar.</td><td class="ok">confirmado 2026-10-08</td></tr>
+  <tr><td>Gateway S3 (modo F6)</td><td>A ordem inverte-se: <b>cabo do F6 ao S3 primeiro</b>, depois connect no F6 (o F6 alimenta o S3). O USB host do S3 arranca logo no <code>setup()</code>, porque o F6 só espera cerca de 2 s por um anfitrião. O Wi-Fi do S3 só arranca depois de o F6 estar ligado (ou ao fim de 8 s), a 11 dBm: os picos de corrente do rádio na USB do F6 desligavam o S3.</td><td class="ok">confirmado 2026-10-15</td></tr>
+</table>
+<p class="small">Um S3 ligado a um PC em vez do F6 fica sem nada no barramento USB; ao fim de 10 s reinicia uma vez sem o USB host, com a porta série (configuração por USB).</p>
+
+<h2>3. Arranque da sessão (handshake)</h2>
+<p>O cabeçalho SysEx de todas as mensagens do FRC-8 é <code>F0 52 00 74 00 00 00 63</code> seguido de um byte de <b>comando</b>, dos dados e de <code>F7</code>.</p>
+<table>
+  <tr><th style="width:5%">#</th><th style="width:14%">Sentido</th><th>Mensagem (hex)</th><th style="width:30%">Função</th></tr>
+  <tr><td>1</td><td>host → F6</td><td><code>F0 52 00 74 00 00 00 63 00 01 F7</code></td><td>pedido de ligação</td></tr>
+  <tr><td>2</td><td>F6 → host</td><td>Notas <code>90 nn vv</code> (luzes e estado) e SysEx de comando <code>10</code>, <code>11</code>, <code>13</code>, <code>16</code>, <code>0D</code>, <code>01</code>, <code>02</code>, <code>0E</code></td><td>despejo do estado do F6; <code>01</code> e <code>02</code> são perguntas</td></tr>
+  <tr><td>3</td><td>host → F6</td><td><code>F0 52 00 74 00 00 00 63 03 01 01 00 00 00 00 00 00 F7</code></td><td>identificação do anfitrião (~0,1 s depois de começar a ouvir o F6). Sem ela os menus de versão do gravador ficam presos (issue #2 do emulador)</td></tr>
+  <tr><td>4</td><td>host → F6</td><td><code>F0 52 00 74 00 00 00 63 0F 01 00 09 30 09 30 00 F7</code></td><td>a tensão de alimentação do anfitrião, em centivolts (<code>09 30</code> = 9·128+48 = 1200 = 12,00 V, dois valores); sem ela o gravador mostra "Low Battery" no menu de firmware; mantém a sessão</td></tr>
+  <tr><td>5</td><td>host → F6</td><td>repetir o <code>63 0F</code> e um <code>FE</code> de <b>0,25 em 0,25 s</b></td><td>sinal de vida: sem ele o F6 corta a USB ao fim de ~1 s</td></tr>
+</table>
+<ul>
+  <li>O F6 espera cerca de 0,5 s pela identificação (o Atom responde ao fim de 0,1 s). O <code>63 0F</code> é do anfitrião para o F6 (a tensão); no despejo o F6 manda de volta o <code>63 10</code>, o <code>63 11</code> e o <code>63 13</code> (abaixo). O código do Atom e do S3 filtra como sinal de vida um <code>63 0F</code> que chegue do F6, mas a issue #2 só vê o <code>63 10</code> nesse sentido, num F8n Pro: <span class="tb">por confirmar</span> no F6.</li>
+  <li>O F6 e o F8n Pro não mandam o <code>80 00 00</code> que o F4 manda (as nossas capturas e a issue #2 do emulador): a sessão arranca sem ele.</li>
+  <li><b>Sessão já aberta</b> (o programa reiniciou com o cabo ligado): o F6 não volta a mandar o estado. Se ao fim de 2 s não se sabe quais as pistas armadas, repete-se <code>handshake</code> + <code>ident</code> + <code>power</code> uma vez; se nem assim, o estado das pistas fica "desconhecido" (nunca "nenhuma armada").</li>
+  <li>O emulador público usa também <code>B7 02 00</code>, <code>91 00 00</code>, <code>93 00 00</code>, <code>CA 00 00</code> (50 ms entre cada). O Atom e o S3 não os enviam e a sessão funciona; ficam como variante de teste em <code>f6_frc.py</code> (<span class="tb">por confirmar</span> se alguma coisa depende deles).</li>
+</ul>
+<h3>Despejo do estado no arranque (captura de 2026-10-19)</h3>
+<table>
+  <tr><th style="width:52%">Mensagens (hex)</th><th>Significado</th></tr>
+  <tr><td><code>90 00 00 &nbsp;90 18 00 &nbsp;90 01 00 &nbsp;90 19 00 &nbsp;...&nbsp; 90 07 00 &nbsp;90 1F 00</code></td><td>pistas 0 a 7 (<code>90 n</code>) e as suas luzes (<code>90 18+n</code>), todas a 0</td></tr>
+  <tr><td><code>90 08 00 &nbsp;...&nbsp; 90 0F 00</code></td><td>PFL / pista seleccionada, desligado</td></tr>
+  <tr><td><code>90 27 00 &nbsp;90 26 7F</code></td><td>botão rotativo em TRIM (PAN desligado)</td></tr>
+  <tr><td><code>90 28 00 &nbsp;90 29 00</code></td><td>PLAY e REC desligados</td></tr>
+  <tr><td><code>90 10 7F &nbsp;90 11 00 &nbsp;90 12 00</code></td><td>saída LR seleccionada</td></tr>
+  <tr><td><code>F0 .. 63 10 09 30 07 04 F7</code></td><td>tensão nominal 1200 = <b>12,00 V</b> e tensão de corte 900 = <b>9,00 V</b> (pares de 7 bits em centivolts: 9·128+48 e 7·128+4)</td></tr>
+  <tr><td><code>F0 .. 63 11 00 F7</code></td><td>tipo de bateria: 0 alcalina, 1 Ni-MH, 2 lítio (aqui: alcalina)</td></tr>
+  <tr><td><code>F0 .. 63 13 3C F7</code></td><td>brilho do LED: 60 (0x3C)</td></tr>
+  <tr><td><code>F0 .. 63 16 00 F7</code></td><td>caixa de texto fechada</td></tr>
+  <tr><td><code>F0 .. 63 0D 00 F7</code> &nbsp;<code>F0 .. 63 0E 00 64 F7</code></td><td>significado desconhecido (a issue #2 do emulador também os regista, iguais)</td></tr>
+  <tr><td><code>F0 .. 63 01 F7</code> &nbsp;<code>F0 .. 63 02 F7</code></td><td>perguntas do F6 (o Atom não responde)</td></tr>
+</table>
+<p class="small">"<code>F0 ..</code>" abrevia o cabeçalho <code>F0 52 00 74 00 00 00 63</code>. O significado do <code>63 10</code>, <code>63 11</code> e <code>63 13</code> foi decifrado na issue #2 do emulador (num F8n Pro); os bytes do nosso F6 têm o mesmo formato e dão valores certos (12,00 V, alcalina, 60), mas não os conferimos no menu do F6. São <b>definições</b>, não o nível da bateria.</p>
+
+<h2>4. Botões (anfitrião → F6)</h2>
+<p>Um botão é <code>90 nota 7F</code> (carregar) seguido, ~80 ms depois, de <code>90 nota 00</code> (largar). O S3 faz o par no próprio chip: dois pedidos HTTP separados por 80 ms não são de confiança.</p>
+<table>
+  <tr><th style="width:11%">Nota</th><th style="width:25%">Botão</th><th>Notas</th><th style="width:15%">Confiança</th></tr>
+  <tr><td><code>24</code></td><td>REC</td><td>Sem pistas armadas o F6 não grava e nunca confirma: o bridge recusa o REC nesse caso (só se o F6 já disse quais estão armadas).</td><td class="ok">confirmado</td></tr>
+  <tr><td><code>22</code></td><td>STOP</td><td>Sem confirmação adicional.</td><td class="ok">confirmado</td></tr>
+  <tr><td><code>23</code></td><td>PLAY</td><td class="no">Com o F6 a gravar, o PLAY põe uma marca na take e deixa a faixa em pausa (visto a 2026-10-18). Nunca se envia a gravar.</td><td class="ok">confirmado</td></tr>
+  <tr><td><code>10</code> <code>11</code> <code>12</code></td><td>USER 1, 2, 3</td><td>A função escolhe-se no F6: None, Mark, Key Hold, Clear Clip Indicator, Circled. No sentido F6 → host as mesmas notas indicam a saída LR / MAIN / SUB.</td><td class="ok">confirmado</td></tr>
+  <tr><td><code>13</code></td><td>SCENE INC</td><td>Incrementa a cena.</td><td class="tb">por confirmar</td></tr>
+  <tr><td><code>14</code></td><td>SCENE NAME</td><td>Abre a caixa de texto do F6 (<code>63 16 01</code>).</td><td class="tb">por confirmar</td></tr>
+  <tr><td><code>15</code></td><td>NOTE</td><td>Abre o menu de nota.</td><td class="tb">por confirmar</td></tr>
+  <tr><td><code>16</code></td><td>TRACK NAME</td><td>Abre o menu do nome da pista.</td><td class="tb">por confirmar</td></tr>
+  <tr><td><code>21</code></td><td>OK da roda do menu</td><td>Carregar na roda.</td><td class="tb">por confirmar</td></tr>
+  <tr><td><code>B0 3C 41</code> · <code>B0 3C 01</code></td><td>roda do menu: cima · baixo</td><td>Soltar com <code>B0 3C 00</code> (50 ms depois; 120 ms entre passos).</td><td class="tb">por confirmar</td></tr>
+</table>
+
+<h2>5. Estado (F6 → anfitrião)</h2>
+<table>
+  <tr><th style="width:21%">Mensagem</th><th>Significado</th><th style="width:15%">Confiança</th></tr>
+  <tr><td><code>90 29 vv</code></td><td>REC: <code>vv</code> &gt; 0 a gravar, 0 parado. É a única fonte de verdade do estado de gravação.</td><td class="ok">confirmado</td></tr>
+  <tr><td><code>90 28 vv</code></td><td>PLAY ligado/desligado.</td><td class="ok">confirmado</td></tr>
+  <tr><td><code>90 n vv</code>, n = 00 a 07</td><td>Pista n armada (<code>vv</code> &gt; 0). Cada uma vem com <code>90 18+n 00</code> (luz), sempre 0. O Atom aceita também <code>8A n vv</code> (variante do emulador).</td><td class="ok">confirmado (2026-10-15)</td></tr>
+  <tr><td><code>Dn vv</code>, n = 0 a 9</td><td>Medidor da pista n (8 e 9 = saída L/R). <code>vv</code> = segmentos acesos, de 0 a 12; 12 é o vermelho. Chegar ao vermelho a gravar numa pista armada conta como clip (uma vez por pista e por take).</td><td class="ok">confirmado 2026-10-08</td></tr>
+  <tr><td><code>90 08..0F</code></td><td>PFL / pista seleccionada. Ao mexer no trim de uma pista o F6 acende <code>90 08+n</code> e manda o estado das 8 pistas de uma vez (<code>90 n</code>, <code>90 18+n</code>, <code>90 08+n</code>).</td><td class="ok">confirmado</td></tr>
+  <tr><td><code>90 26</code> · <code>90 27</code></td><td>Modo do botão rotativo: TRIM · PAN.</td><td class="tb">por confirmar</td></tr>
+  <tr><td><code>90 10/11/12</code></td><td>Saída seleccionada LR / MAIN / SUB (na captura de arranque: LR).</td><td class="ok">visto no arranque</td></tr>
+  <tr><td><code>F0 .. 63 16 01/00 F7</code></td><td>Caixa de texto do F6 aberta / fechada.</td><td class="ok">confirmado</td></tr>
+  <tr><td><code>F0 .. 63 10 / 11 / 13 F7</code></td><td>Definições de alimentação e do LED, enviadas no despejo: tensões nominal e de corte, tipo de bateria, brilho do LED (secção 3). <b>Não é o nível da bateria.</b></td><td class="tb">decifrado pela issue #2 (F8n Pro)</td></tr>
+  <tr><td><code>F0 .. 63 0F ..</code></td><td>Um sinal de vida do F6 que o código filtra dos registos; na issue #2 (F8n Pro) este comando só vai do anfitrião para o gravador.</td><td class="tb">por confirmar</td></tr>
+  <tr><td><code>F0 .. 63 14 F7</code></td><td>Confirmação do texto da caixa (do emulador, com o F4); não visto no F6.</td><td class="tb">por confirmar</td></tr>
+  <tr><td><code>F0 .. 63 0D / 0E ..</code></td><td>Enviados no despejo; significado desconhecido.</td><td class="tb">por confirmar</td></tr>
+</table>
+<div class="box warn">
+  <b>O que o F6 NÃO reporta.</b> Faders e trim: nem em 32-bit float nem em 24-bit com o trim a rodar de 12 a 75 (medido a 2026-10-15). Escrever <code>92</code>, <code>E0-E7</code>, <code>B0/B2</code>, <code>A2</code> ou <code>82</code> não teve efeito. O F6 ignora os valores <code>E1/E0</code> do FRC-8 real (testado a 2026-10-13). Por isso o Atom só <b>lê</b> a mesa e nunca a escreve. As mensagens do emulador (<code>92 pista 0-127</code> faders, <code>98 pista 0-127</code> botão rotativo, <code>8A</code>/<code>8B</code>) estão no código mas <span class="no">não são reportadas pelo F6</span>.
+</div>
+
+<h2>6. Teclado: texto no F6 (HID dentro de SysEx)</h2>
+<p>As teclas vão como HID dentro de SysEx, para preencher a caixa de texto do F6 (cena, nota, nome da pista). <span class="tb">Por testar no F6</span>; do protocolo do emulador.</p>
+<pre>carregar:  F0 52 00 74 00 00 00 63 0C 00 [mod] 00 [código HID] 00 00 00 00 00 F7
+largar:    F0 52 00 74 00 00 00 63 0C 00 00 00 00 00 00 00 00 00 F7        (tudo a zero)</pre>
+<ul>
+  <li>Fluxo: carregar SCENE NAME (<code>90 14</code>) ou NOTE/TRACK NAME; o F6 abre a caixa (<code>63 16 01</code>); escrever; fechar com <code>ENTER</code> (HID <code>28</code>); o F6 diz <code>63 16 00</code>. Aguarda-se a caixa aberta antes de escrever.</li>
+  <li>Modificador: <code>02</code> = Shift. Letras: <code>04</code> a <code>1D</code> (a=04). Dígitos 1-9: <code>1E</code> a <code>26</code>; 0 = <code>27</code>. Espaço <code>2C</code>, <code>-</code> <code>2D</code>, Backspace <code>2A</code>, Enter <code>28</code>.</li>
+  <li>Caracteres aceites pelo F6 (manual, p. 14), num teclado US (<b>SYSTEM &gt; USB &gt; FRC-8 &gt; Keyboard Type</b>): letras, dígitos, espaço, <code>- _ ! @ # $ ^ ( ) = + [ ] { } ; ' ` ,</code>. Não há <code>.</code> nem <code>/</code>; espaço e <code>@</code> não no início.</li>
+  <li>Pausa de 30 ms entre carregar e largar.</li>
+</ul>
+
+<h2>7. Tempos e limites</h2>
+<table>
+  <tr><th style="width:33%">Constante</th><th>Valor</th><th>Origem</th></tr>
+  <tr><td>Sinal de vida (<code>63 0F</code> + <code>FE</code>)</td><td>0,25 s</td><td>sem ele, o F6 corta a USB em ~1 s</td></tr>
+  <tr><td>Resposta de identificação</td><td>0,10 s depois de começar a ouvir (o F6 espera ~0,5 s)</td><td><code>REPLY_AFTER</code></td></tr>
+  <tr><td>Espera do estado das pistas</td><td>2 s, depois repete o arranque uma vez</td><td><code>STATE_WAIT</code></td></tr>
+  <tr><td>Botão carregado → largado</td><td>80 ms (S3: dentro do chip)</td><td><code>press()</code>, <code>f6Press()</code></td></tr>
+  <tr><td>Medidores: pico seguro</td><td>1,0 s</td><td><code>PEAK_HOLD</code></td></tr>
+  <tr><td>S3 → Atom (HTTP)</td><td>estado a cada 0,2 s; falha após 10 pedidos seguidos (2 s)</td><td><code>GW_POLL</code>, <code>GW_FALHAS</code></td></tr>
+  <tr><td>Aguardar confirmação do REC (página autónoma)</td><td>3 s</td><td><code>F6_PAGE</code></td></tr>
+</table>
+
+<h2>8. Onde está implementado</h2>
+<table>
+  <tr><th style="width:34%">Ficheiro</th><th>Papel</th></tr>
+  <tr><td><code>atom/app/frc8.py</code></td><td>Classe <code>Link</code>: sessão FRC-8 por cabo (nó ALSA <code>/dev/snd/midiC*D*</code>) ou pelo S3 (HTTP). Estado, botões, teclado, menu, clips.</td></tr>
+  <tr><td><code>_esp32_tools/gopro_gw/gopro_gw.ino</code></td><td>Modo F6 do S3: USB host (cliente MIDI), handshake e sinal de vida no chip. Rotas <code>GET /api/f6</code>, <code>GET /api/f6/lite</code>, <code>POST /api/f6/press?note=24|22|23</code> e <code>POST /api/f6/midi?hex=...</code> (no modo autónomo, só REC/STOP/PLAY). Página do comando <code>F6_PAGE</code>.</td></tr>
+  <tr><td><code>testes/f6_usb_ltc/f6_frc.py</code></td><td>Cliente de ensaio: <code>sudo python3 f6_frc.py</code> e depois <code>r</code> REC, <code>s</code> STOP, <code>p</code> PLAY, <code>q</code> sair. Opções para testar variantes do arranque.</td></tr>
+</table>
+
+<h2>9. Um exemplo completo de sessão</h2>
+<table>
+  <tr><th style="width:13%">Sentido</th><th style="width:52%">Mensagens (hex)</th><th>Significado</th></tr>
+  <tr><td>host → F6</td><td><code>F0 52 00 74 00 00 00 63 00 01 F7</code></td><td>pedido de ligação</td></tr>
+  <tr><td>F6 → host</td><td><code>90 00 00 &nbsp;90 18 00 ... 90 29 00 ... F0 .. 63 10 09 30 07 04 F7 ...</code></td><td>despejo do estado</td></tr>
+  <tr><td>host → F6</td><td><code>F0 52 00 74 00 00 00 63 03 01 01 00 00 00 00 00 00 F7</code></td><td>identificação (~0,1 s depois)</td></tr>
+  <tr><td>host → F6</td><td><code>F0 52 00 74 00 00 00 63 0F 01 00 09 30 09 30 00 F7</code></td><td>tensão de alimentação (12,00 V)</td></tr>
+  <tr><td>host → F6</td><td><code>63 0F</code> + <code>FE</code></td><td>repetir de 0,25 em 0,25 s, sempre</td></tr>
+  <tr><td>host → F6</td><td><code>90 24 7F</code> ... 80 ms ... <code>90 24 00</code></td><td>REC</td></tr>
+  <tr><td>F6 → host</td><td><code>90 29 7F</code></td><td>REC confirmado (começa o tempo da take)</td></tr>
+  <tr><td>F6 → host</td><td><code>D0 0A &nbsp;D1 07 ...</code></td><td>medidores durante a gravação (valores de exemplo)</td></tr>
+  <tr><td>host → F6</td><td><code>90 22 7F</code> ... 80 ms ... <code>90 22 00</code></td><td>STOP</td></tr>
+  <tr><td>F6 → host</td><td><code>90 29 00</code></td><td>gravação terminada</td></tr>
+</table>
+
+<h2>10. O que fica por descobrir</h2>
+<ul>
+  <li>O significado dos dados dos SysEx <code>63 0D</code> e <code>63 0E</code> e das perguntas <code>63 01</code> e <code>63 02</code> (o Atom não responde às perguntas e a sessão funciona); e conferir no menu do F6 que o <code>63 10</code> / <code>63 11</code> / <code>63 13</code> dizem o que a issue #2 do emulador diz.</li>
+  <li>O <b>nível da bateria do F6</b> não vem pelo FRC-8 (os <code>63 10</code> e <code>63 11</code> são definições). Só se conhece pelo Bluetooth (mensagem <code>88</code> do protocolo da série F); a issue #2 do emulador também só encontra faders e outros comandos por Bluetooth.</li>
+  <li>Se o F6 aceita as notas SCENE INC, NOTE e OK, e o fluxo do teclado de ponta a ponta no F6 (a abertura da caixa foi vista).</li>
+  <li>O efeito de um segundo REC com o F6 já a gravar (a página autónoma não o bloqueia).</li>
+  <li>Se faders e trim chegam por outro caminho (as mensagens do emulador não chegam).</li>
+</ul>
+
+<h2>11. Fontes e créditos</h2>
+<ul>
+  <li>Protocolo base: emulador público <b>howardlin551155/Zoom-FRC-8-Emulator</b> (capturado entre um FRC-8 real e um F4) e a issue #2 desse repositório. Confirmado no F6 a 2026-10-08, 10-13, 10-15, 10-18 e 10-19 neste projecto.</li>
+  <li>Issue #2 do emulador, "F8n Pro Findings" (PennRobotics, agosto e setembro de 2026): os <code>63 10</code>, <code>63 11</code>, <code>63 13</code>, o <code>63 0F</code> como tensão do anfitrião, o <code>63 03</code> como identificação e o lsusb do F8n Pro. As nossas capturas do F6 coincidem byte a byte nos <code>63 13</code>, <code>63 0D</code>, <code>63 01</code>, <code>63 02</code> e <code>63 0E</code>.</li>
+  <li>Manual do F6 da Zoom (teclado, pág. 14) e observações no aparelho, indicadas com as datas.</li>
+  <li>Este documento descreve um protocolo lido por observação e por código, para interoperar com o F6 do utilizador. Não é documentação oficial da Zoom.</li>
+</ul>
+
+</body>
+</html>

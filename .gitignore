@@ -1,0 +1,70 @@
+# Credenciais e configuracao local (nunca publicar)
+wifi_secrets.h
+sftp.json
+devices.json
+iphones.json
+gopros.json
+bmpccs.json
+sonys.json
+termos.json
+*secret*.json
+*wifi_config*.json
+# configuracao do operador no Atom (se o bridge correr a partir da pasta do repositorio)
+settings.json
+c3.json
+usb_map.json
+ap.conf
+gw_fw.json
+profiles.json
+gw_fw_pendente.json
+.env
+*.pem
+
+# Sony Camera Remote SDK: o SDK em si (headers, documentacao, exemplos) nunca entra no repositorio, so o sony_ctl ja
+# compilado com as bibliotecas de que precisa (atom/app/sony/AVISO-SONY.md)
+CrSDK_*/
+atom/app/sony/modelos.inc
+
+# Caches e compilados
+__pycache__/
+*.pyc
+*.bak*
+*.map
+*.elf
+*.bin
+!atom/app/fw/s3/gopro_gw.bin
+!atom/app/fw/s3/gopro_gw.merged.bin
+!atom/app/fw/m5stick/*.bin
+!firmware/m5stick/*.bin
+!firmware/estavel/*.bin
+
+# Toolchain e bibliotecas de terceiros (instalar com arduino-cli)
+_esp32_tools/arduino15/
+_esp32_tools/build_*/
+_esp32_tools/sketchbook/
+_esp32_tools/tmp/
+_esp32_tools/arduino-cli.exe
+
+# Registos e backups
+*.log
+*.csv
+bk/
+bridge/
+*.tar.gz
+*.zip
+
+# Notas pessoais
+TODO.md
+
+wifi.json
+gw_token
+sftp_known_hosts
+repo.path
+take_aberto.json
+
+
+# Registos dos testes no Atom
+f6_faders_*.log
+
+# Testes e sondas: ficam so na maquina de quem desenvolve
+tests/

@@ -1,0 +1,47 @@
+Gateway S3 das GoPro (ESP32-S3, Arduino): gopro_gw.ino
+
+Wi-Fi sem segredos compilados
+  O S3 guarda ate 2 redes na memoria. Ao arrancar tenta-as por ordem (15 s cada). Sem redes guardadas, ou se nenhuma
+  ligar, abre o AP aberto "GOPRO-S3-XXXX" (LED magenta) com o portal em http://192.168.4.1: lista as redes, escolhe-se a
+  do bridge (a do AP das cameras) e escreve-se a palavra-passe; o S3 guarda-a e reinicia. O AP fica 3 min (mais enquanto
+  alguem estiver ligado a ele); havendo redes guardadas, volta a tentar-as. Com o S3 ligado, o mesmo portal esta em
+  http://<ip>/ . Um S3 com o firmware anterior (Wi-Fi compilado) guarda a rede que ja usava ao receber este.
+  API: GET /api/wifi, GET /api/wifi/scan, POST /api/wifi/save (s1,p1[,s2,p2]), POST /api/wifi/forget.
+  Serie USB: WIFI mostra o estado, WIFIFORGET esquece as redes.
+
+Configuracao inicial: sempre pelo Atom, por USB (consola: Devices > Set up / update a gateway by USB). Uma placa em branco recebe a
+imagem completa (apaga tudo, grava bootloader + particoes + aplicacao); uma placa que ja funciona so recebe a aplicacao (apaga o
+otadata para arrancar dela), e o Wi-Fi e as GoPro ficam. O Wi-Fi da rede das cameras vai pela porta serie (WIFISET) sem aparecer em lado nenhum.
+
+Compilar
+  O GitHub compila o firmware (.github/workflows/s3-firmware.yml) quando esta pasta muda e guarda o .bin em
+  atom/app/fw/s3/gopro_gw.bin; o Atom grava-o em todos os S3 (GLOBAL SETTINGS > Update gateways). O workflow tambem publica a
+  imagem completa (gopro_gw-merged) para a primeira gravacao de um S3 novo por USB. Localmente: arduino-cli compile com a
+  placa M5Stack StampS3 (USB CDC on boot), ESP32 core 3.x e NimBLE-Arduino 2.5.1. A placa e as versoes do workflow estao
+  no bloco env: dele; confirmar que batem com as do Arduino IDE.
+
+OTA: POST /api/fw?md5=.. (multipart) e POST /api/fw/rollback; recusado com uma GoPro a gravar.
+
+Placas: o mesmo .bin serve a M5Stack StampS3 e a Seeed XIAO ESP32S3 (conector u.FL para antena externa). O LED e o unico que muda: tipo
+  rgb (StampS3: WS2812 no GPIO21, alimentado pelo GPIO38), simple (XIAO: LED simples no GPIO21, acende a 0) ou off. Guarda-se em "gw"/"led".
+  Serie: LED rgb|simple|off. HTTP (com token): POST /api/led?t=rgb|simple|off. O /api/status diz "led_type". Consola: GATEWAYS > S3 > LED type.
+
+Modo F6 AUTONOMO (2026-10-16): o S3 tem 3 modos (gopro, f6, f6solo). No f6solo nao ha Atom: o S3 abre o Wi-Fi F6-REMOTE-XXXX (WPA2,
+  palavra-passe dada ao mudar de modo: POST /api/mode?m=f6solo&psk=..., 8 a 63 caracteres; com token, ou sem ele no AP de configuracao do portal), serve a pagina do comando em
+  http://192.168.4.1/ (REC/STOP/PLAY com toque longo, estado e medidores das faixas) e aceita REC, STOP e PLAY de quem esta ligado
+  a esse Wi-Fi (a palavra-passe e a autorizacao). GET /api/f6/lite e o estado curto que a pagina le 4 vezes por segundo. Voltar:
+  o menu System da pagina ("...": POST /api/mode?m=f6|gopro, sem token so a partir deste modo). Para passar a este modo sem a consola: no AP do
+  portal (GOPRO-S3-XXXX, em modo GoPro) abrir 192.168.4.1 > System > Mode > F6 standalone, escrever a palavra-passe e Switch. Sem palavra-passe valida guardada, o S3 arranca em F6 normal.
+  Consola do Atom: GATEWAYS > S3 > Mode. A fonte da pagina (F6_PAGE) esta no .ino; testa-se num browser contra um servidor simulado.
+
+Modo F6 (selector, 2026-10-15)
+  O mesmo S3 faz de comando FRC-8 do Zoom F6 em vez de falar com as GoPro. Escolhe-se na consola: GATEWAYS > S3 > Set F6 mode
+  (ou Set GoPro mode para voltar). O S3 guarda o modo e reinicia; o endereco e o token sao os mesmos. As GoPro ficam
+  guardadas no S3 para quando voltar ao modo GoPro. Sem Bluetooth no modo F6.
+  Ligar: o cabo do F6 ao S3 PRIMEIRO, e so depois no F6: MENU > SYSTEM > USB > FRC-8 > connect (o F6 alimenta o S3).
+  O bridge encontra o F6 sozinho: a linha ZOOM F6 diz "via S3 gateway" e o REC/STOP vai pelos alvos de REC, como com o cabo.
+  LED: azul ao arrancar, ciano com o F6 ligado, amarelo a piscar sem ele, magenta no AP de configuracao.
+  No modo F6 a USB do S3 e o host do F6 logo ao arrancar (o F6 corta a alimentacao se esperar): nao ha porta serie.
+  Ligado ao Atom, ao fim de 10 s sem nada no USB o S3 reinicia uma vez com a porta serie (configuracao por USB; serie:
+  MODE gopro|f6). Ou, como sempre: ligar com o BOOT carregado.
+  API: GET /api/f6, POST /api/f6/press?note=24, POST /api/f6/midi?hex=..., POST /api/mode?m=gopro|f6 (com token).

@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>F6 Card</title>
+<style>
+    :root {
+        --bg: #0a0a0a; --surface: #151515; --surface2: #1c1c1c; --border: #3d3d3d;
+        --text: #e8e8e8; --muted: #b8b8b8; --red: #e63946; --red-dark: #2a1215;
+        --green: #2ec46a; --orange: #f59e0b; --blue: #3b82f6;
+        --mono: 'JetBrains Mono', 'SF Mono', ui-monospace, monospace;
+        --sans: 'DM Sans', -apple-system, system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 14px; }
+    header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border);
+             position: sticky; top: 0; background: var(--bg); z-index: 2; flex-wrap: wrap; }
+    header h1 { font-family: var(--mono); font-size: 14px; letter-spacing: 3px; margin: 0; }
+    header a { color: var(--muted); text-decoration: none; font-size: 13px; }
+    #st { font-family: var(--mono); font-size: 12px; margin-left: auto; }
+    .ok { color: var(--green); } .bad { color: var(--red); } .warn { color: var(--orange); } .dim { color: var(--muted); }
+    main { padding: 12px 16px 40px; max-width: 1400px; margin: 0 auto; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+    button { font-family: var(--sans); font-size: 12px; font-weight: 600; padding: 9px 12px; border-radius: 10px;
+             border: 1px solid var(--border); background: var(--surface2); color: var(--text); cursor: pointer; }
+    button:disabled { opacity: .35; cursor: not-allowed; }
+    button.on { border-color: var(--green); color: var(--green); }
+    button.danger { border-color: var(--red); color: var(--red); background: var(--red-dark); }
+    button.small { padding: 5px 8px; font-size: 11px; border-radius: 8px; }
+    .bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+    #msg { min-height: 20px; font-size: 13px; margin: 6px 0 10px; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 12px; }
+    .help { color: var(--muted); font-size: 13px; line-height: 1.5; }
+    .scroll { overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; font-size: 12px; }
+    th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--border); vertical-align: top; white-space: nowrap; }
+    th { color: var(--muted); font-weight: 600; font-family: var(--mono); font-size: 11px; letter-spacing: 1px; }
+    td.wrap { white-space: normal; min-width: 140px; }
+    td.mono { font-family: var(--mono); }
+    tr.nolog td { background: rgba(245, 158, 11, .07); }
+    tr.err td { background: rgba(230, 57, 70, .08); }
+    .crumb { font-family: var(--mono); font-size: 13px; }
+    .crumb a { color: var(--blue); cursor: pointer; text-decoration: none; }
+    .ent-name { cursor: pointer; }
+    .ent-name.dir { color: var(--blue); font-weight: 600; }
+    .actions { display: flex; gap: 6px; }
+    .pill { font-family: var(--mono); font-size: 11px; padding: 2px 6px; border-radius: 6px; border: 1px solid var(--border); }
+    .pill.good { color: var(--green); border-color: var(--green); }
+    .pill.ng { color: var(--red); border-color: var(--red); }
+    #player { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+    #player .pl-name { font-family: var(--mono); font-size: 12px; color: var(--green); word-break: break-all; }
+    #player .pl-pos { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+    @media (max-width: 700px) { th, td { padding: 6px 5px; } header { padding: 10px 12px; } main { padding: 10px 12px 40px; } }
+</style>
+</head>
+<body>
+<header>
+    <a href="/">&larr; bridge</a>
+    <h1>ZOOM F6 CARD</h1>
+    <span id="st" class="dim">...</span>
+</header>
+<main>
+    <div class="card help" id="howto" hidden>
+        No card. On the F6: <b>MENU &rsaquo; SYSTEM &rsaquo; USB &rsaquo; SD Card Reader</b>, then plug the USB cable
+        into the bridge. When done: on the F6 choose <b>Off</b>, unplug, and for the bridge again
+        <b>FRC-8 &rsaquo; connect</b> with the cable unplugged, then plug it in.
+    </div>
+    <div class="card" id="player" hidden>
+        <span>&#9654;</span><span class="pl-name" id="plName"></span><span class="pl-pos" id="plPos"></span>
+        <button class="small danger" onclick="stopPlay()">&#9632; STOP</button>
+        <span class="dim" style="font-size:12px">bridge headphone output: take the TC cable off the F6 and plug headphones</span>
+    </div>
+    <div class="tabs">
+        <button id="tabTakes" class="on" onclick="tab('takes')">TAKES</button>
+        <button id="tabFiles" onclick="tab('files')">FILES</button>
+    </div>
+    <div id="msg"></div>
+
+    <section id="takes">
+        <div class="bar">
+            <button id="btnScan" onclick="scan()">READ CARD</button>
+            <a id="csvLink" href="/api/devices/f6/card/report.csv" hidden><button>DOWNLOAD CSV</button></a>
+            <span class="dim" id="scanInfo"></span>
+        </div>
+        <p class="help">Reads the card (read-only) and lines every F6 take up with the shoot log by its
+            start timecode: the bridge take number, GOOD / NO-GOOD / MARK, notes and the cameras that rolled.
+            Scene, take, circled, note and track names come from the metadata inside the WAV files.</p>
+        <div class="scroll"><table id="tbl"></table></div>
+        <div id="logOnly"></div>
+    </section>
+
+    <section id="files" hidden>
+        <div class="bar">
+            <button onclick="up()">&uarr; UP</button>
+            <button onclick="mkdir()">NEW FOLDER</button>
+            <button onclick="go('F6_TRASH')">TRASH</button>
+            <button class="danger" onclick="emptyTrash()">EMPTY TRASH</button>
+            <span class="dim" id="free"></span>
+        </div>
+        <div class="crumb" id="crumb"></div>
+        <p class="help">DELETE moves to the F6_TRASH folder on the card; only EMPTY TRASH deletes for good.
+            Renaming files does not change the metadata inside them (scene, take...). The F6 may not play
+            back takes whose names or folders were changed. PLAY uses the bridge's headphone output;
+            while something plays, rename / move / delete wait (stop it first).</p>
+        <div class="scroll"><table id="ents"></table></div>
+    </section>
+</main>
+<script>
+// Sessao do PIN (acesso.py): se o bridge pedir o PIN (sessao expirada), vai-se ao ecra do PIN e volta-se aqui depois.
+(function () {
+    const f = window.fetch;
+    window.fetch = function () {
+        return f.apply(this, arguments).then(r => {
+            if (r.status === 401 && r.headers.get('content-type') && r.headers.get('content-type').indexOf('json') >= 0)
+                r.clone().json().then(d => { if (d && d.login) location.replace(d.login + '?next=' + encodeURIComponent(location.pathname + location.search)); }).catch(() => {});
+            return r;
+        });
+    };
+})();
+</script>
+<script>
+    let _path = '', _busy = false;
+    const $ = id => document.getElementById(id);
+    function el(tag, txt, cls) { const e = document.createElement(tag); if (txt != null) e.textContent = txt; if (cls) e.className = cls; return e; }
+    function msg(t, cls) { const m = $('msg'); m.textContent = t || ''; m.className = cls || ''; }
+
+    async function call(url, body) {
+        const opt = body ? {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)} : {};
+        try {
+            const r = await fetch(url, opt);
+            const d = await r.json().catch(() => ({}));
+            if (!r.ok || d.ok === false) throw new Error(d.error || ('HTTP ' + r.status));
+            return d;
+        } catch (e) { msg(e.message, 'bad'); throw e; }
+    }
+
+    async function status() {
+        try {
+            const s = await (await fetch('/api/devices/f6/card/status')).json();
+            const st = $('st');
+            st.textContent = s.device ? 'CARD ' + s.device + (s.busy ? '  busy...' : '') : 'NO CARD';
+            st.className = s.device ? 'ok' : 'bad';
+            $('howto').hidden = !!s.device;
+            $('csvLink').hidden = !s.csv;
+            const pl = s.player || {};
+            $('player').hidden = !pl.playing;
+            if (pl.playing) {
+                $('plName').textContent = pl.file;
+                $('plPos').textContent = dur(pl.pos) + ' / ' + dur(pl.dur);
+            }
+            if (pl.error && pl.error !== _plErr) { _plErr = pl.error; msg('Playback: ' + pl.error, 'bad'); }
+        } catch (e) {}
+    }
+    let _plErr = null;
+    setInterval(status, 1000); status();
+    async function play(p) {
+        const d = await call('/api/devices/f6/card/play', {path: p}).catch(() => null);
+        if (d) { msg('Playing ' + d.file + ' (' + dur(d.dur) + ')', 'ok'); status(); }
+    }
+    async function stopPlay() { await call('/api/devices/f6/card/stop', {}).catch(() => null); status(); }
+
+    function tab(t) {
+        $('takes').hidden = t !== 'takes'; $('files').hidden = t !== 'files';
+        $('tabTakes').classList.toggle('on', t === 'takes'); $('tabFiles').classList.toggle('on', t === 'files');
+        msg('');
+        if (t === 'files') go(_path);
+    }
+
+    // --- TAKES ---
+    const COLS = [['folder', 'FOLDER'], ['scene', 'SCENE'], ['take', 'TAKE'], ['start_tc', 'START TC'],
+                  ['duration_s', 'DUR'], ['circled', 'CIRCLED'], ['note', 'NOTE'], ['tracks', 'TRACKS'],
+                  ['size_mb', 'MB'], ['log_take', 'LOG TAKE'], ['marks', 'MARKS'], ['log_notes', 'LOG NOTES'],
+                  ['cameras', 'CAMERAS']];
+    function dur(s) { if (s == null || s === '') return ''; s = Math.round(s); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+
+    async function scan() {
+        const b = $('btnScan'); b.disabled = true; msg('Reading the card...', 'dim');
+        try {
+            const d = await call('/api/devices/f6/card/scan', {});
+            const rep = d.report;
+            msg(rep.takes.length + ' takes on the card', 'ok');
+            $('scanInfo').textContent = 'read ' + new Date(rep.at * 1000).toLocaleTimeString();
+            drawTakes(rep);
+            status();
+        } catch (e) {} finally { b.disabled = false; }
+    }
+
+    function drawTakes(rep) {
+        const t = $('tbl'); t.innerHTML = '';
+        const h = el('tr'); COLS.forEach(c => h.appendChild(el('th', c[1]))); h.appendChild(el('th', ''));
+        t.appendChild(h);
+        rep.takes.forEach(k => {
+            const tr = el('tr', null, k.error ? 'err' : (k.log_take ? '' : 'nolog'));
+            COLS.forEach(([c]) => {
+                let v = k[c];
+                if (c === 'duration_s') v = dur(v);
+                const td = el('td', null, ['note', 'tracks', 'log_notes', 'folder'].includes(c) ? 'wrap' : (['start_tc', 'take', 'size_mb'].includes(c) ? 'mono' : ''));
+                if (c === 'circled' && v === 'TRUE') td.appendChild(el('span', 'CIRCLED', 'pill good'));
+                else if (c === 'marks' && v) v.split(' ').forEach(m => td.appendChild(el('span', m.toUpperCase(), 'pill ' + (m === 'good' ? 'good' : m === 'no-good' ? 'ng' : ''))));
+                else td.textContent = v == null ? '' : v;
+                tr.appendChild(td);
+            });
+            const a = el('td'); const box = el('div', null, 'actions');
+            const open = el('button', 'OPEN', 'small'); open.onclick = () => { _path = k.folder === '.' ? '' : k.folder; tab('files'); };
+            const ren = el('button', 'RENAME TAKE', 'small'); ren.onclick = () => renameTake(k);
+            const pl = el('button', '\u25B6 PLAY', 'small');
+            pl.onclick = () => play((k.folder === '.' ? '' : k.folder + '/') + k.files[0]);
+            box.append(pl, open, ren); a.appendChild(box); tr.appendChild(a);
+            if (k.error) tr.title = k.error;
+            t.appendChild(tr);
+        });
+        const lo = $('logOnly'); lo.innerHTML = '';
+        if (rep.log_only.length) {
+            lo.appendChild(el('p', 'In the shoot log but not on this card (other card, deleted, or the F6 did not record):', 'warn'));
+            rep.log_only.forEach(r => lo.appendChild(el('div', 'take ' + r.take + '  ' + r.time + '  TC ' + r.tc, 'dim')));
+        }
+    }
+
+    async function renameTake(k) {
+        const nova = prompt('New name for take "' + k.base + '" (all its files' + (k.folder.split('/').pop().startsWith(k.base) ? ' and its folder' : '') + '):', k.base);
+        if (!nova || nova === k.base) return;
+        const d = await call('/api/devices/f6/card/op', {op: 'rename_take', path: k.folder === '.' ? '' : k.folder, name: k.base, dest: nova}).catch(() => null);
+        if (d) { msg(d.message, 'ok'); scan(); }
+    }
+
+    // --- FILES ---
+    function size(n) { if (n == null) return ''; return n > 1e9 ? (n / 1e9).toFixed(2) + ' GB' : n > 1e6 ? (n / 1e6).toFixed(1) + ' MB' : Math.ceil(n / 1e3) + ' kB'; }
+    function join(a, b) { return a ? a + '/' + b : b; }
+
+    async function go(p) {
+        const d = await call('/api/devices/f6/card/ls?path=' + encodeURIComponent(p || '')).catch(() => null);
+        if (!d) return;
+        _path = d.path;
+        const c = $('crumb'); c.innerHTML = '';
+        const root = el('a', 'card'); root.onclick = () => go(''); c.appendChild(root);
+        let acc = '';
+        (d.path ? d.path.split('/') : []).forEach(part => {
+            acc = join(acc, part); const alvo = acc;
+            c.appendChild(document.createTextNode(' / '));
+            const a = el('a', part); a.onclick = () => go(alvo); c.appendChild(a);
+        });
+        $('free').textContent = d.free_gb != null ? d.free_gb + ' GB free of ' + d.total_gb : '';
+        const t = $('ents'); t.innerHTML = '';
+        const h = el('tr'); ['NAME', 'SIZE', 'MODIFIED', ''].forEach(x => h.appendChild(el('th', x))); t.appendChild(h);
+        if (!d.entries.length) { const tr = el('tr'); const td = el('td', '(empty)', 'dim'); td.colSpan = 4; tr.appendChild(td); t.appendChild(tr); }
+        d.entries.forEach(e => {
+            const tr = el('tr');
+            const n = el('td', (e.dir ? '📁 ' : '') + e.name, 'wrap ent-name' + (e.dir ? ' dir' : ''));
+            if (e.dir) n.onclick = () => go(join(_path, e.name));
+            tr.appendChild(n);
+            tr.appendChild(el('td', size(e.size), 'mono'));
+            tr.appendChild(el('td', new Date(e.mtime * 1000).toLocaleString(), 'mono'));
+            const a = el('td'); const box = el('div', null, 'actions');
+            const p = join(_path, e.name);
+            const r = el('button', 'RENAME', 'small'); r.onclick = () => renameEnt(p, e.name);
+            const m = el('button', 'MOVE', 'small'); m.onclick = () => moveEnt(p, e.name);
+            const x = el('button', 'DELETE', 'small danger'); x.onclick = () => trashEnt(p, e.name);
+            if (!e.dir && /\.wav$/i.test(e.name)) {
+                const pl = el('button', '\u25B6 PLAY', 'small'); pl.onclick = () => play(p);
+                box.append(pl);
+            }
+            box.append(r, m, x); a.appendChild(box); tr.appendChild(a);
+            t.appendChild(tr);
+        });
+    }
+    function up() { go(_path.split('/').slice(0, -1).join('/')); }
+    async function op(body, depois) {
+        const d = await call('/api/devices/f6/card/op', body).catch(() => null);
+        if (d) { msg(d.message, 'ok'); go(depois != null ? depois : _path); }
+    }
+    function mkdir() { const n = prompt('New folder name in /' + _path + ':'); if (n) op({op: 'mkdir', path: _path, name: n}); }
+    function renameEnt(p, nome) { const n = prompt('New name for "' + nome + '":', nome); if (n && n !== nome) op({op: 'rename', path: p, name: n}); }
+    function moveEnt(p, nome) {
+        const d = prompt('Move "' + nome + '" to which folder? (path from the card root, empty = root)', _path);
+        if (d !== null) op({op: 'move', path: p, dest: d});
+    }
+    function trashEnt(p, nome) { if (confirm('Move "' + nome + '" to the trash (F6_TRASH)?')) op({op: 'trash', path: p}); }
+    function emptyTrash() {
+        const c = prompt('Empty F6_TRASH deletes its files FOR GOOD. Type EMPTY to confirm:');
+        if (c) op({op: 'empty_trash', confirm: c}, _path.startsWith('F6_TRASH') ? '' : _path);
+    }
+</script>
+</body>
+</html>

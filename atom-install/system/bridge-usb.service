@@ -1,0 +1,19 @@
+[Unit]
+Description=Camera Bridge USB (class compliant MIDI, audio, HID, video)
+After=camera-bridge.service
+Wants=camera-bridge.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/camera-bridge
+ExecStart=/usr/bin/python3 /opt/camera-bridge/usb_bridge.py
+Restart=always
+RestartSec=5
+# Abaixo do bridge: um controlador nunca pode atrasar um REC.
+Nice=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

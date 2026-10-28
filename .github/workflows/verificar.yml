@@ -1,0 +1,37 @@
+# Verificacao do repositorio sem o Atom (ci/verificar.py): Python compila e sem nomes indefinidos (pyflakes), regras da API e
+# docs/API.md em dia (api_check), JavaScript das paginas valido, e a consola a arrancar e a responder num simulador.
+name: Verificar
+
+on:
+  push:
+    paths:
+      - "atom/app/**"
+      - "atom-install/**"
+      - "bridge-ctl.py"
+      - "firmware/*.py"
+      - "docs/API.md"
+      - "ci/**"
+      - ".github/workflows/verificar.yml"
+  pull_request:
+    paths:
+      - "atom/app/**"
+      - "atom-install/**"
+      - "bridge-ctl.py"
+      - "firmware/*.py"
+      - "docs/API.md"
+      - "ci/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    steps:
+      # Accao fixa por commit (uma etiqueta pode ser mudada; o commit nao)
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262      # v4
+      - name: Ferramentas (pyflakes, pyte) num venv
+        run: python3 -m venv /tmp/v && /tmp/v/bin/pip install --quiet pyflakes pyte
+      - name: Verificar
+        run: /tmp/v/bin/python ci/verificar.py

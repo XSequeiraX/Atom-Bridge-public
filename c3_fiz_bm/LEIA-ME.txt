@@ -1,0 +1,51 @@
+Gateway C3 (XIAO ESP32-C3, MicroPython): a BMPCC por Bluetooth, o Wi-Fi e o FIZ, num so aparelho.
+
+Ficheiros
+  boot.py      arranque e guarda do firmware novo (OTA): repoe o anterior se o novo nao arrancar.
+  main.py      so arranca o programa (import app).
+  app.py       BLE: liga a BMPCC (e o FIZ, so no modo Autonomo), repassa os pacotes ao Atom, dispara o REC.
+  netcfg.py    Wi-Fi (rede guardada ou AP "FIZ-C3-XXXX"), pagina de configuracao, API HTTP, beacon UDP 5172.
+  pair_bm_kbd.py, reconnect_bm.py   emparelhamento e religacao pela USB (mpremote), para diagnostico.
+  app.mpy, netcfg.mpy   o app.py e o netcfg.py compilados (mpy-cross do MicroPython 1.24.1) pelo GitHub
+               (.github/workflows/c3-firmware.yml). E isto que vai para o C3, nao o codigo-fonte: compilar no proprio C3
+               gastava a memoria que o Wi-Fi e o Bluetooth precisam ("Wifi Unknown Error 0x0101", 2026-10-14).
+               Para compilar a mao: pip install mpy-cross==1.24.1.post3; mpy-cross app.py; mpy-cross netcfg.py
+
+A configuracao inicial de um C3 (em branco ou com firmware antigo sem OTA) faz-se sempre pelo Atom, por USB, sem outro PC:
+consola, Devices > Set up / update a gateway by USB (ou GATEWAYS > C3 > Setup / update by USB), ou na shell do Atom:
+  sudo python3 /opt/camera-bridge/gw_usb.py --ap [/dev/ttyACM0]
+Num C3 em branco grava primeiro o MicroPython (esptool); depois copia boot.py, main.py, app.mpy e netcfg.mpy (mpremote) e, se escolheres uma
+rede, o wifi.json (modo Bridge). Num C3 que ja funciona e sem escolher rede, so os ficheiros do programa: o Wi-Fi e o emparelhamento da camara
+ficam. Depois disto o C3 actualiza-se por Wi-Fi.
+A consola mostra os passos em directo (a identificar, a copiar cada ficheiro, a conferir o checksum no C3, a reiniciar) e um erro diz
+em que passo parou. Um C3 que nao responde como gateway a funcionar NAO se apaga sozinho (um erro transitorio levava o Wi-Fi e a
+camera emparelhada): a consola pergunta antes de apagar e instalar de raiz. Porta ocupada: sudo systemctl stop ModemManager. Emparelhar a camara faz-se a seguir
+(GATEWAYS > C3 > Pair camera).
+
+Gravar pela primeira vez (USB): copiar boot.py, main.py, app.mpy e netcfg.mpy para o C3 (mpremote fs cp), sem app.py nem
+netcfg.py (o MicroPython preferia-os aos .mpy). Depois o firmware
+vem sempre do Atom, por Wi-Fi: o git pull traz-o ao repositorio, o instalador deixa-o no Atom e o Atom envia-o ao C3 (consola:
+GLOBAL SETTINGS > Update gateways, ou GATEWAYS > C3 > Firmware; tambem sozinho quando nada grava). Fica em .bak e volta atras se o
+novo nao arrancar.
+
+Modos (escolhem-se na pagina do C3 ou na consola, GATEWAYS > C3 > Mode)
+  Autonomo   o C3 nao fala com o Atom (no codigo o nome e "fiz", por compatibilidade).
+  Bridge     o Atom ve o estado da BMPCC (REC, bateria, ISO, cartoes, timecode...) por /api/bm/poll e manda-lhe
+             o REC e as definicoes por /api/bm/write.
+
+O FIZ
+  E so deste C3 e so do modo Autonomo: o botao REC do FIZ dispara a BMPCC ligada a este C3. No modo Bridge
+  quem grava e o Atom: o C3 nem procura o FIZ (larga-o se estava ligado; fase "off") e volta a procura-lo ao
+  passar a Autonomo. O Atom nao recebe nada do FIZ nem mostra o estado dele.
+
+Emparelhar a camara: consola do Atom, GATEWAYS > C3 > Pair camera (a camara em modo de emparelhamento).
+Mais do que uma BMPCC: um C3 por camara; cada C3 extra acrescenta-se no Atom (ver README, "Mais do que uma BMPCC").
+
+API HTTP (porta 80)
+  GET  /api/status                 estado (BMPCC, FIZ, Wi-Fi, modo, firmware)
+  GET  /api/bm/poll?since=N&tcs=M  pacotes da BMPCC depois de N e timecode (so modo Bridge; 409 no autonomo)
+  POST /api/bm/write?hex=...       comando para a BMPCC (so modo Bridge)
+  POST /api/mode?m=fiz|bridge      /api/rec  /api/cam/*  /api/fw  /api/fw/put  /api/fw/apply  /api/fw/rollback
+  Com o ficheiro gw_token no C3, todos os POST e o GET /api/scan?fresh=1 pedem o cabecalho X-GW-Token (um GET /api/scan sem
+  token so devolve a lista em cache, nunca faz uma procura); so o portal do AP (/save, /wifi_reset, /api/mode) dispensa-o
+  enquanto o C3 esta no seu AP. /save: SSID 1-32 bytes, password vazia, 8-63 bytes ou 64 hexadecimais (PSK).

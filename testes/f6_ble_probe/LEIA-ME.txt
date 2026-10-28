@@ -1,0 +1,13 @@
+f6_ble_probe: experiencia a parte do gateway. O S3 faz-se passar pelo modulo Bluetooth do Zoom F6 (BTA-1) e regista no
+terminal serie o que o iPhone (app F Control) fizer. Os UUIDs e o anuncio vieram do firmware do F6; nada foi confirmado
+contra um BTA-1 real.
+
+Gravar (apaga o gateway que estiver no S3: Wi-Fi, token e GoPro emparelhadas perdem-se):
+  python -m esptool --chip esp32s3 --port COM4 erase_flash
+  python -m esptool --chip esp32s3 --port COM4 write_flash 0x0 f6_ble_probe.merged.bin
+
+Usar: python -m serial.tools.miniterm --echo --eol LF COM4 115200 ; abrir a app F Control no iPhone e procurar o aparelho.
+Comandos no terminal: help, stats, name <texto>, adv service|orig, echo on|off, bond on|off, send tx|flow <hex...>, scan [segundos] [texto], state, try <hex> ; <hex>, sweep, pace <ms>, auto on|off, framing msg|stream, connect [texto], cw <rx|tx|flow|n> <hex...>, cr <car>, cdisc, reboot.
+
+Voltar a ser gateway: gravar atom/app/fw/s3/gopro_gw.merged.bin no 0x0, ou Setup / update by USB na consola do Atom.
+Compilar: o mesmo FQBN do gateway (ver .github/workflows/s3-firmware.yml); usa a biblioteca NimBLE-Arduino 2.5.1.

@@ -19,3 +19,10 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---------------------------------------------------------------------------
+Third-party files in this repository are NOT covered by this license: they keep
+their own licenses, listed in AVISOS-LICENCAS.md. In particular, the Sony
+Camera Remote SDK runtime files in atom/app/sony/ (libCr_Core.so, CrAdapter/)
+are licensed by Sony Corporation under the Sony Camera Remote SDK License
+Agreement and may only be distributed as part of this application.

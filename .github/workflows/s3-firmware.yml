@@ -1,0 +1,109 @@
+# Compila o firmware do gateway S3 (GoPro) e deixa o .bin no repositorio, onde o Atom o vai buscar com o git pull.
+# O firmware nao leva segredos (o Wi-Fi guarda-se no proprio S3), por isso o .bin pode viver no repositorio.
+name: S3 firmware
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "_esp32_tools/gopro_gw/**"
+      - ".github/workflows/s3-firmware.yml"
+  workflow_dispatch:
+
+# Compilar so le o repositorio; quem escreve (o commit do .bin) e um trabalho a parte, pequeno, sem accoes de terceiros.
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      # O core nao tem a M5Stack StampS3: usa-se a ESP32S3 Dev Module com o que a StampS3 tem (ESP32-S3FN8: 8 MB de flash, USB
+      # nativo com CDC no arranque, esquema de particoes com duas aplicacoes para o OTA). Ajustar aqui se o S3 for outro.
+      FQBN: "esp32:esp32:esp32s3:CDCOnBoot=cdc,USBMode=hwcdc,FlashSize=8M,PartitionScheme=default_8MB,FlashMode=dio"
+      ESP32_CORE: "3.1.1"
+      NIMBLE: "2.5.1"
+    steps:
+      # Accoes fixas por commit (uma etiqueta pode ser mudada; o commit nao)
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262      # v4
+      - name: arduino-cli
+        uses: arduino/setup-arduino-cli@81d310742121c928ea9c8bbd407b4217b432ae02      # v2.0.0
+      - name: Core e bibliotecas
+        run: |
+          arduino-cli config init
+          arduino-cli config add board_manager.additional_urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install "esp32:esp32@${ESP32_CORE}"
+          arduino-cli lib install "NimBLE-Arduino@${NIMBLE}"
+      - name: Placas disponiveis (diagnostico)
+        run: |
+          arduino-cli board listall esp32:esp32 > boards.txt
+          grep -i -E "m5|stamp|ESP32S3 Dev|esp32:esp32:esp32s3$" boards.txt | head -n 20 | while IFS= read -r l; do echo "::notice title=board::${l:0:300}"; done
+          arduino-cli board details -b esp32:esp32:esp32s3 2>/dev/null | grep -E "^(USB CDC|Flash Size|Partition Scheme|Flash Mode)|CDCOnBoot|FlashSize|PartitionScheme|FlashMode" | head -n 30 | while IFS= read -r l; do echo "::notice title=opt::${l:0:300}"; done
+      - name: Compilar
+        run: |
+          set +e
+          arduino-cli compile --fqbn "$FQBN" --export-binaries --output-dir build _esp32_tools/gopro_gw > build.log 2>&1
+          rc=$?
+          tail -n 40 build.log
+          if [ $rc -ne 0 ]; then
+            # O registo completo nem sempre se consegue ler de fora: os erros vao tambem como anotacoes (e no resumo do job).
+            grep -E "error|Error|ERROR|fatal|undefined reference|No such file" build.log | head -n 20 | while IFS= read -r l; do
+              l="${l//%/%25}"; l="${l//$'\r'/}"; echo "::error title=compile::${l:0:480}"
+            done
+            { echo '### Compile failed'; echo '```'; tail -n 60 build.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit $rc
+      - name: Verificar o .bin
+        run: |
+          ls -l build
+          python3 - <<'PY'
+          d = open("build/gopro_gw.ino.bin", "rb").read()
+          assert d[:1] == b"\xe9" and len(d) > 100000, "not an ESP32 app image"
+          print("ok", len(d), "bytes")
+          PY
+      - name: Os .bin para o trabalho que os guarda
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02      # v4
+        with:
+          name: gopro_gw-bins
+          path: |
+            build/gopro_gw.ino.bin
+            build/gopro_gw.ino.merged.bin
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262      # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093      # v4
+        with:
+          name: gopro_gw-bins
+          path: build
+      - name: Guardar no repositorio (o Atom busca-o com o git pull)
+        run: |
+          mkdir -p atom/app/fw/s3
+          cp build/gopro_gw.ino.bin atom/app/fw/s3/gopro_gw.bin
+          # A imagem completa (bootloader + particoes + app) serve para a primeira gravacao de um S3 novo, pelo Atom, por USB.
+          cp build/gopro_gw.ino.merged.bin atom/app/fw/s3/gopro_gw.merged.bin
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add atom/app/fw/s3/gopro_gw.bin atom/app/fw/s3/gopro_gw.merged.bin
+          # O que fica no git tem de ser igual ao compilado (um .gitattributes de texto tirava os bytes 0x0D e o S3 nao arrancava).
+          for f in gopro_gw.bin:gopro_gw.ino.bin gopro_gw.merged.bin:gopro_gw.ino.merged.bin; do
+            git show ":atom/app/fw/s3/${f%%:*}" | cmp - "build/${f##*:}" || { echo "::error::${f%%:*} changed by git (line endings)"; exit 1; }
+          done
+          if git diff --cached --quiet; then echo "sem alteracoes"; exit 0; fi
+          git commit -m "S3 firmware: gopro_gw.bin e imagem completa compilados [skip ci]"
+          # O main pode ter andado durante a compilacao: junta-se por cima e tenta-se de novo (antes o push falhava).
+          for n in 1 2 3 4; do
+            if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
+            sleep $((n * 5))
+          done
+          echo "::error::could not push the S3 firmware"; exit 1
+      - name: Imagem completa para a primeira gravacao por USB
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02      # v4
+        with:
+          name: gopro_gw-merged
+          path: build/gopro_gw.ino.merged.bin

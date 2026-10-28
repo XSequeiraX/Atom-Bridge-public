@@ -1,0 +1,16 @@
+[Unit]
+Description=Screen brightness with Fn+F6 (less) and Fn+F7 (more)
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/camera-bridge
+ExecStart=/usr/bin/python3 /opt/camera-bridge/brilho.py
+Restart=always
+RestartSec=5
+Nice=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

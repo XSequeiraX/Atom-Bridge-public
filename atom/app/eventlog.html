@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Camera Bridge — Event Log</title>
+    <style>
+        :root { color-scheme: dark; }
+        :root {
+            --bg: #0a0a0a;
+            --surface: #151515;
+            --surface2: #1c1c1c;
+            --border: #3d3d3d;
+            --text: #e8e8e8;
+            --text-dim: #a8a8a8;
+            --text-muted: #6a6a6a;
+            --red: #e63946;
+            --orange: #f59e0b;
+            --mono: 'JetBrains Mono', 'SF Mono', monospace;
+            --sans: -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        * { box-sizing: border-box; }
+        body {
+            background: var(--bg); color: var(--text); font-family: var(--sans);
+            margin: 0; padding: calc(16px + env(safe-area-inset-top, 0px)) 16px calc(24px + env(safe-area-inset-bottom, 0px));
+            font-size: 15px;
+        }
+        h1 {
+            font-size: 15px; letter-spacing: 1px; text-transform: uppercase;
+            color: var(--text-dim); font-weight: 700; margin: 0;
+        }
+        .topbar {
+            display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+            gap: 10px; margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--border);
+            position: sticky; top: 0; background: var(--bg); padding-top: env(safe-area-inset-top, 0px);
+        }
+        .topbar-left { display: flex; align-items: baseline; gap: 10px; }
+        .count { font-family: var(--mono); font-size: 12px; color: var(--text-muted); }
+        .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .btn {
+            background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+            border-radius: 8px; padding: 9px 14px; font-size: 12px; font-weight: 600;
+            letter-spacing: 0.5px; text-transform: uppercase; cursor: pointer; text-decoration: none;
+            font-family: var(--sans); display: inline-block;
+        }
+        .btn:active { transform: scale(0.97); }
+        .log-wrap {
+            border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
+            padding: 4px 0;
+        }
+        .log-line {
+            font-family: var(--mono); font-size: 13px; padding: 6px 14px;
+            border-bottom: 1px solid var(--surface2); white-space: pre-wrap; word-break: break-word;
+        }
+        .log-line:last-child { border-bottom: none; }
+        .log-ts { color: var(--orange); margin-right: 8px; }
+        .log-line.fault-line { color: var(--red); }
+        .empty { padding: 40px 16px; text-align: center; color: var(--text-muted); font-size: 13px; }
+    </style>
+</head>
+<body>
+    <div class="topbar">
+        <div class="topbar-left">
+            <h1>Event Log</h1>
+            <span class="count" id="count">--</span>
+        </div>
+        <div class="actions">
+            <a class="btn" href="/">&larr; Control</a>
+            <a class="btn" href="/shootlog">Shoot Log</a>
+            <button class="btn" id="btnReload" onclick="load()">Reload</button>
+            <button class="btn" id="btnNew" onclick="newLog()">New Log</button>
+            <a class="btn" href="/api/log/events.log" download="log/events.log">Download</a>
+        </div>
+    </div>
+
+    <div class="log-wrap" id="logWrap">
+        <div class="empty" id="emptyMsg" hidden>No events recorded yet.</div>
+    </div>
+
+<script>
+// Sessao do PIN (acesso.py): se o bridge pedir o PIN (sessao expirada), vai-se ao ecra do PIN e volta-se aqui depois.
+(function () {
+    const f = window.fetch;
+    window.fetch = function () {
+        return f.apply(this, arguments).then(r => {
+            if (r.status === 401 && r.headers.get('content-type') && r.headers.get('content-type').indexOf('json') >= 0)
+                r.clone().json().then(d => { if (d && d.login) location.replace(d.login + '?next=' + encodeURIComponent(location.pathname + location.search)); }).catch(() => {});
+            return r;
+        });
+    };
+})();
+</script>
+    <script>
+        // So leitura de proposito -- isto e um rasto de diagnostico gerado
+        // pelo proprio bridge, nao ha nada aqui para um operador corrigir
+        // a mao como no shoot log.
+        async function load() {
+            const btn = document.getElementById('btnReload');
+            btn.disabled = true;
+            try {
+                const text = await fetch('/api/log/events.log').then(r => r.text());
+                render(text);
+            } catch (e) {
+                document.getElementById('count').textContent = 'load failed';
+            }
+            btn.disabled = false;
+        }
+
+        function render(text) {
+            const lines = text.split('\n').filter(l => l.trim().length > 0);
+            document.getElementById('count').textContent = lines.length + ' lines';
+            const wrap = document.getElementById('logWrap');
+            document.getElementById('emptyMsg').hidden = lines.length > 0;
+            if (!lines.length) {
+                wrap.innerHTML = '';
+                wrap.appendChild(document.getElementById('emptyMsg'));
+                return;
+            }
+            // Mais recente primeiro, tal como a caixa compacta que isto substitui.
+            const frag = document.createDocumentFragment();
+            for (const line of lines.slice().reverse()) {
+                const div = document.createElement('div');
+                const m = line.match(/^(\[\d{2}:\d{2}:\d{2}\])\s*([\s\S]*)$/);
+                const isFault = /\bFAULT\b/.test(line);
+                div.className = 'log-line' + (isFault ? ' fault-line' : '');
+                if (m) {
+                    const ts = document.createElement('span');
+                    ts.className = 'log-ts';
+                    ts.textContent = m[1];
+                    div.appendChild(ts);
+                    div.appendChild(document.createTextNode(m[2]));
+                } else {
+                    div.textContent = line;
+                }
+                frag.appendChild(div);
+            }
+            wrap.innerHTML = '';
+            wrap.appendChild(frag);
+        }
+
+        async function newLog() {
+            if (!confirm('Archive the current event log and start a fresh one?')) return;
+            const r = await fetch('/api/log/events/new', {method: 'POST',
+                headers: {'Content-Type': 'application/json'}, body: '{}'}).then(x => x.json());
+            if (r && r.ok) load();
+            else alert('Failed: ' + ((r && r.error) || 'unknown error'));
+        }
+
+        load();
+        setInterval(load, 10000);
+    </script>
+</body>
+</html>

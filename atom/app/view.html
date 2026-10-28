@@ -1,0 +1,269 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Camera Bridge — View</title>
+    <style>
+        :root { color-scheme: dark; }
+        /* Respeitar a area segura: com viewport-fit=cover o conteudo comeca
+           por baixo do entalhe, e o primeiro elemento ficava inalcancavel. */
+        body { background:#0a0a0a; color:#e5e5e5; font-family:-apple-system,sans-serif; margin:0;
+               padding:calc(16px + env(safe-area-inset-top, 0px)) 16px calc(16px + env(safe-area-inset-bottom, 0px)); }
+        h1 { font-size:13px; letter-spacing:1px; text-transform:uppercase; color:#888; font-weight:600; margin:0 0 14px; }
+        .card { background:#151515; border:1px solid #2a2a2a; border-radius:10px; padding:12px 14px; margin-bottom:10px; }
+        .card.rec { border-color:rgba(230,57,70,0.5); background:rgba(230,57,70,0.08); }
+        .row { display:flex; justify-content:space-between; align-items:center; }
+        .name { font-weight:600; font-size:14px; }
+        .dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:#444; margin-right:6px; }
+        .dot.on { background:#2ec46a; }
+        .dot.rec { background:#e63946; animation:pulse 1s infinite; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+        .meta { font-size:11px; color:#888; font-family:monospace; margin-top:4px; }
+        /* Mesma composicao da linha na gaveta da pagina de controlo (FREE / SWAP
+           / LOAD, maiusculas, monospace), para as duas lerem igual. Maior aqui
+           de proposito: esta pagina e para se olhar de longe, nao para se
+           mexer. */
+        .health { font-size:15px; color:#888; font-family:monospace; margin-top:18px;
+                  text-align:center; letter-spacing:1px; }
+        .health.warn { color:#f59e0b; }
+
+        /* Estado dos links. O da BMPCC repete o que o cartao dela ja diz, e fica na mesma: le-se de relance. */
+        .links { display:flex; gap:8px; margin-bottom:10px; }
+        .link {
+            flex:1; text-align:center; font-family:monospace; font-size:12px;
+            letter-spacing:1px; padding:9px 6px; border-radius:8px;
+            border:1px solid #2a2a2a; background:#151515; color:#666;
+        }
+        .link.on { border-color:rgba(46,196,106,0.5); color:#2ec46a; }
+        .link.off { border-color:rgba(230,57,70,0.4); color:#e63946; }
+
+        /* Relogios. A data e o dia da semana ficam por baixo da hora, e as
+           discordancias sao ditas por extenso -- escrever o dia errado nos
+           metadados e o erro que mais custa a desfazer em pos, por isso nao se
+           esconde nada aqui so por ser uma pagina de leitura. */
+        .clocks { font-family:monospace; margin-bottom:10px; }
+        .clk { display:flex; align-items:baseline; gap:10px; padding:9px 12px;
+               border:1px solid #2a2a2a; border-radius:8px; background:#151515;
+               margin-bottom:6px; }
+        .clk-tag { font-size:11px; letter-spacing:1px; color:#666; min-width:42px; }
+        .clk-val { font-size:19px; font-weight:700; color:#e5e5e5; }
+        .clk-date { font-size:12px; color:#888; margin-left:auto; text-align:right;
+                    white-space:pre-line; line-height:1.3; }
+        .clk.bad .clk-val, .clk.bad .clk-date { color:#e63946; }
+        .clk.warn .clk-val, .clk.warn .clk-date { color:#f59e0b; }
+        .clk-note { font-size:12px; color:#f59e0b; font-family:monospace;
+                    text-align:center; margin:2px 0 8px; letter-spacing:0.5px; }
+        .back {
+            display:block; text-align:center; text-decoration:none;
+            font-family:monospace; font-size:12px; letter-spacing:1px;
+            color:#e5e5e5; border:1px solid #2a2a2a; border-radius:8px;
+            padding:12px; margin:14px 0 16px; background:#151515;
+        }
+        .back:active { transform:scale(0.98); }
+
+        /* Ecras largos: parar de esticar, como na pagina principal. Uma lista
+           de cartoes espalhada por 1400px nao ganha nada -- os nomes ficam num
+           extremo e os valores no outro, e o olho tem de atravessar o ecra para
+           ligar os dois. Mesma largura da pagina de controlo, para as duas
+           lerem igual. Fica no FIM da folha, que e onde as anulacoes pertencem:
+           com a mesma especificidade, ganha quem vier depois. */
+        @media (min-width: 720px) {
+            body { max-width:680px; margin-inline:auto; }
+            /* No telemovel esta linha divide o ecra com os cartoes e nao pode
+               pesar tanto; em iPad e desktop ha espaco e ela e para se ler de
+               longe, que e o uso desta pagina. */
+            .health { font-size:21px; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Aberto por um atalho do ecra principal do iPhone nao ha barra de
+         navegacao nenhuma, portanto sem isto nao havia forma de voltar. E uma
+         ligacao normal e nao um history.back() de proposito: o historico pode
+         estar vazio se esta foi a primeira pagina. -->
+    <a class="back" href="/">&larr; BACK TO CONTROL</a>
+    <h1>Camera Bridge — View (read-only)</h1>
+    <div class="links" id="links"></div>
+    <div class="clocks" id="clocks"></div>
+    <div class="clk-note" id="clkNote" hidden></div>
+    <div id="cards"></div>
+    <div class="health" id="health">--</div>
+<script>
+// Sessao do PIN (acesso.py): se o bridge pedir o PIN (sessao expirada), vai-se ao ecra do PIN e volta-se aqui depois.
+(function () {
+    const f = window.fetch;
+    window.fetch = function () {
+        return f.apply(this, arguments).then(r => {
+            if (r.status === 401 && r.headers.get('content-type') && r.headers.get('content-type').indexOf('json') >= 0)
+                r.clone().json().then(d => { if (d && d.login) location.replace(d.login + '?next=' + encodeURIComponent(location.pathname + location.search)); }).catch(() => {});
+            return r;
+        });
+    };
+})();
+</script>
+    <script>
+        // Espelham o que a pagina de controlo faz. Duplicado de proposito: esta
+        // pagina e deliberadamente autonoma -- um ficheiro, sem JS partilhado --
+        // para continuar a abrir mesmo que a outra parta.
+        const DIAS = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];
+        function esc(t) {
+            return String(t == null ? '' : t).replace(/&/g,'&amp;')
+                .replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+        function ddmmyyyy(iso) {
+            const p = String(iso || '').split('-');
+            return (p.length === 3 && p[0].length === 4) ? p[2]+'-'+p[1]+'-'+p[0] : String(iso || '');
+        }
+        function comDia(iso) {
+            const p = String(iso || '').split('-').map(Number);
+            if (p.length !== 3 || p.some(isNaN)) return String(iso || '');
+            const dt = new Date(p[0], p[1]-1, p[2]);
+            return ddmmyyyy(iso) + '\n' + (DIAS[dt.getDay()] || '');
+        }
+        function hhmmss(secs) {
+            if (typeof secs !== 'number') return '--:--:--';
+            const n = Math.floor(secs) % 86400, p = v => String(v).padStart(2,'0');
+            return p(Math.floor(n/3600))+':'+p(Math.floor(n/60)%60)+':'+p(n%60);
+        }
+        function linhaClk(tag, valor, data, classe, id) {
+            return '<div class="clk' + (classe ? ' '+classe : '') + '">'
+                 + '<span class="clk-tag">' + esc(tag) + '</span>'
+                 + '<span class="clk-val"' + (id ? ' id="'+id+'"' : '') + '>'
+                 + esc(valor) + '</span>'
+                 + '<span class="clk-date">' + esc(data) + '</span></div>';
+        }
+
+        // Contador local. Sem isto o timecode andava aos saltos de 2 em 2
+        // segundos, ao ritmo do refresh -- e o `ltc.tc` que a API manda e a
+        // leitura CONGELADA no instante do jam, nao a hora corrente: mostra-la
+        // dava um relogio parado a horas do jam, que foi o que aconteceu.
+        let _base = null;
+        function formatarTc(secs, fps) {
+            if (typeof secs !== 'number') return '--:--:--:--';
+            const p = v => String(v).padStart(2, '0');
+            if (!fps) return hhmmss(secs);
+            // Contado em frames inteiros: (t%1)*fps engana-se por virgula
+            // flutuante e mostrava o frame anterior.
+            const DIA = 86400 * fps;
+            let n = Math.floor(secs * fps + 1e-6) % DIA;
+            if (n < 0) n += DIA;
+            return p(Math.floor(n / (fps*3600))) + ':' + p(Math.floor(n / (fps*60)) % 60)
+                 + ':' + p(Math.floor(n / fps) % 60) + ':' + p(n % fps);
+        }
+        function tick() {
+            if (!_base) return;
+            const passou = (Date.now() - _base.at) / 1000;
+            const ltc = document.getElementById('ltcVal');
+            if (ltc && typeof _base.ltc === 'number') {
+                ltc.textContent = formatarTc(_base.ltc + passou, _base.fps);
+            }
+            const ntp = document.getElementById('ntpVal');
+            if (ntp && typeof _base.sys === 'number') {
+                ntp.textContent = hhmmss(_base.sys + passou);
+            }
+        }
+
+        function fmt(c) {
+            return '<div class="card' + (c.recording ? ' rec' : '') + '">' +
+                '<div class="row"><span class="name"><span class="dot ' +
+                (c.recording ? 'rec' : c.connected ? 'on' : '') + '"></span>' + c.label + '</span>' +
+                '<span>' + (c.connected ? (c.recording ? 'RECORDING' : 'standby') : 'offline') + '</span></div>' +
+                '<div class="meta">' + (c.connected ? c.detail : '') + '</div></div>';
+        }
+        function refresh() {
+            Promise.all([
+                fetch('/api/status').then(r => {
+                    if (r.headers.get('X-Bridge-Web-Off')) location.reload();   // desligada na consola: so o aviso
+                    return r.json();
+                }),
+                fetch('/api/devices?type=canon').then(r => r.json()).then(d => {
+                    // lista [{id, type, ...}] -> mapa por id
+                    const m = {};
+                    ((d && d.devices) || []).forEach(x => { if (x && x.id != null) m[x.id] = x; });
+                    return m;
+                })
+            ]).then(([s, canon]) => {
+                const cards = [{
+                    label: 'BMPCC 6K',
+                    connected: s.camera_connected,
+                    recording: s.is_recording,
+                    detail: (s.battery_percent >= 0 ? s.battery_percent + '%' : '--') + ' \u00b7 ' + (s.timecode || '--:--:--'),
+                }];
+                ['r10', 'r6m2'].forEach(id => {
+                    const c = canon[id] || {};
+                    cards.push({
+                        label: c.model || id.toUpperCase(),
+                        connected: c.connected,
+                        recording: c.recording,
+                        detail: (c.battery_percent >= 0 ? c.battery_percent + '%' : '--'),
+                    });
+                });
+                document.getElementById('cards').innerHTML = cards.map(fmt).join('');
+
+                // O link BLE da BMPCC.
+                document.getElementById('links').innerHTML =
+                      '<div class="link ' + (s.camera_connected ? 'on' : 'off') + '">BM '
+                    + (s.camera_connected ? 'LINKED' : 'DOWN') + '</div>';
+
+                // Relogios, com as discordancias por extenso.
+                const L = s.ltc || {}, linhas = [];
+                const mm = L.date_mismatch;
+                // O valor mostrado sai SEMPRE do now_secs, que anda. O L.tc e a
+                // leitura congelada do jam e so serve de recurso.
+                const vivo = typeof L.now_secs === 'number';
+                const agora = vivo ? formatarTc(L.now_secs, L.fps) : (L.tc || '--:--:--:--');
+                if (mm) {
+                    // A data do gerador discorda da do Atom. E o erro que mais
+                    // custa a desfazer em pos, por isso e dito inteiro.
+                    linhas.push(linhaClk('LTC', agora,
+                        'LTC ' + ddmmyyyy(mm[0]) + '\n\u2260 ATOM ' + ddmmyyyy(mm[1]), 'bad', 'ltcVal'));
+                } else if (L.stepped) {
+                    linhas.push(linhaClk('LTC', 'INVALID', L.invalid_reason || '', 'bad'));
+                } else if (L.stale) {
+                    linhas.push(linhaClk('LTC', agora, 'OLD \u00b7 needs a new read', 'warn', 'ltcVal'));
+                } else if (vivo || L.tc) {
+                    linhas.push(linhaClk('LTC', agora, comDia(L.date), '', 'ltcVal'));
+                } else {
+                    linhas.push(linhaClk('LTC', 'none', 'no reading stored', 'warn'));
+                }
+                const semNtp = s.ntp_age == null;
+                linhas.push(linhaClk('NTP', hhmmss(s.sys_secs),
+                    semNtp ? 'NOT SYNCED'
+                           : comDia(s.sys_date) + (s.ntp_via ? '\nvia ' + s.ntp_via : ''),
+                    semNtp ? 'warn' : '', 'ntpVal'));
+                // Ancorar o contador local. Com o LTC invalido nao ha o que
+                // contar, e mostra-se INVALID parado -- que ai e a verdade.
+                _base = {ltc: (vivo && !L.stepped) ? L.now_secs : null, fps: L.fps || 0,
+                         sys: typeof s.sys_secs === 'number' ? s.sys_secs : null,
+                         at: Date.now()};
+                if (s.camera_connected && s.timecode) {
+                    linhas.push(linhaClk('BM TC', s.timecode, 'live from the camera'));
+                }
+                document.getElementById('clocks').innerHTML = linhas.join('');
+
+                // O desvio entre o timecode da camara e o LTC, quando os dois
+                // estao vivos. Sem isto, as duas fontes podem discordar em
+                // silencio -- foi o que aconteceu com 7s de diferenca.
+                const nota = document.getElementById('clkNote');
+                const dv = s.tc_ltc_delta;
+                nota.hidden = typeof dv !== 'number' || dv === 0;
+                if (!nota.hidden) nota.textContent = 'BM TC is ' + (dv > 0 ? '+' : '') + dv + 's vs LTC';
+                const h = document.getElementById('health');
+                const warn = (s.swap_used_mb || 0) > 20 || (s.mem_percent || 0) > 85;
+                h.className = 'health' + (warn ? ' warn' : '');
+                // Mesma composicao da gaveta: maiusculas, monospace, separado por
+                // pontos medios. Sao as duas o mesmo facto sobre a mesma maquina e
+                // devem ler-se igual, venha-se de onde se vier.
+                h.textContent = 'RAM ' + (s.mem_percent != null ? s.mem_percent + '%' : '--') +
+                    ' \u00b7 SWAP ' + (s.swap_used_mb != null ? s.swap_used_mb + 'MB' : '--') +
+                    ' \u00b7 CPU LOAD ' + (s.load_pct != null ? s.load_pct + '%' : '--');
+            }).catch(() => {});
+        }
+        setInterval(refresh, 2000);
+        setInterval(tick, 100);
+        refresh();
+    </script>
+</body>
+</html>

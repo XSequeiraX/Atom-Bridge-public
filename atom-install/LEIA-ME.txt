@@ -1,0 +1,51 @@
+Camera Bridge no Toshiba NB500 (Atom, Debian 13) - instalacao num so passo
+
+Conteudo
+  install_atom.sh      o script (idempotente: pode correr-se outra vez)
+  lib_app.sh           copia atom/app para /opt/camera-bridge, com copia de seguranca e reposicao
+  system/              servicos systemd (bridge, USB), menu de arranque, calibracao do LTC
+
+Uso (no Atom, com o repositorio clonado)
+  sudo bash atom-install/install_atom.sh                     aplica so o que falta
+  AP_SSID='...' AP_PSK='...' sudo -E bash atom-install/install_atom.sh ...   evita as perguntas do AP
+  Mais simples: bash atualizar_atom.sh (git pull + instalar), ou na consola GLOBAL SETTINGS > Update from GitHub.
+  O Atom actualiza-se do repositorio publico (https://github.com/XSequeiraX/Atom-Bridge-public), sem autenticacao.
+  Os pacotes (apt, pip) so se revem quando a seccao dos pacotes do instalador muda ou falta alguma peca: um update
+  que so traz codigo nao faz apt-get update. Para os rever a forca: sudo FORCE_PKGS=1 bash atom-install/install_atom.sh
+  O esptool e o mpremote dos gateways vem do pip, num ambiente proprio (/opt/gw-tools): o esptool do Debian vem sem os
+  "stubs" e falha a gravar os ESP32.
+  O firmware dos gateways e sempre enviado pelo Atom: o do C3 vem do repositorio (o instalador deixa-o em fw/c3);
+  o do S3 e o .bin guardado no Atom. Ver GLOBAL SETTINGS > Update gateways na consola.
+
+O que faz
+  pacotes, codigo de atom/app em /opt/camera-bridge (verifica o python antes de tocar em nada; se o bridge novo
+  nao arrancar, repoe a copia anterior), interfaces Wi-Fi (uplink + AP AR9271), servico camera-bridge,
+  perfil do AP das cameras (nome escolhido), PipeWire desligado (o ADC do LTC fica livre), menu de arranque
+  com a consola. As mensagens do kernel (driver do Wi-Fi, por exemplo) deixam de aparecer no ecra (sysctl
+  kernel.printk, ficam no journalctl -k). A configuracao do rig (settings.json, c3.json, bmpccs.json, ...) nunca se toca.
+  O quiosque (Xorg + surf no ecra do Atom) saiu a 2026-10-15: num Atom que o tinha, o instalador tira o servico
+  e os pacotes do X e do surf, e o arranque passa a modo texto (multi-user.target).
+
+Nomes dos adaptadores Wi-Fi (fixos, por ficheiros .link em /etc/systemd/network)
+  ps-uplink    Wi-Fi interno, liga a rede do local (reconhecido pelo caminho PCI)
+  ps-control   dongle AR9271 do AP das cameras, perfil do AP (pelo driver)
+  Outros nomes: sudo UP_NAME=... AP_NAME=... bash install_atom.sh. Depois de os
+  mudar e preciso reiniciar o Atom (o script avisa).
+
+AP das cameras sem internet
+  O AP (ps-control) nao partilha a internet do uplink: o NetworkManager continua em "shared" (DHCP, reservas das
+  Canon, gateway 192.168.4.1) e o servico bridge-ap-nonat recusa o que vem do AP (reject: as apps desistem logo) para outra interface.
+  O Atom, os gateways e o Tailscale nao sao afectados. Voltar a partilhar: sudo systemctl disable --now bridge-ap-nonat
+
+De fora de proposito
+  regra udev que desliga a Ethernet; ps-wifi-fallback, ps-portal, ps-ap-channel.
+  O FIZ e o WR-03 foram retirados do bridge (o codigo foi apagado a 2026-10-14). O FIZ so existe dentro do
+  gateway C3, que dispara por ele a sua BMPCC.
+
+Arranque: menu no ecra do Atom (Bridge console / Wi-Fi uplink / Network settings /
+Command line). Sem resposta em 10 s segue para a consola; ao sair dela (Q) volta ao menu.
+  outra linha de comandos:  Ctrl+Alt+F2, ou por SSH
+  voltar a ver o menu:      sudo systemctl restart bridge-boot-menu
+
+Mudancas so no ui.html nao precisam de reiniciar nada: copia-se o ficheiro e
+toca-se no aviso NEW VERSION AVAILABLE da pagina.

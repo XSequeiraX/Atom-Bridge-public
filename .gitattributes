@@ -1,0 +1,18 @@
+# Os fins de linha do codigo do Atom e dos scripts ficam em LF (um .sh com CRLF nao corre no Atom).
+atom/app/** text eol=lf
+atom-install/** text eol=lf
+*.sh text eol=lf
+*.py text eol=lf
+# Binarios: nunca converter fins de linha (o git tirava os bytes 0x0D e estragava o firmware e as fontes).
+*.bin binary
+*.mpy binary
+*.woff2 binary
+*.woff binary
+*.ttf binary
+*.png binary
+*.jpg binary
+*.onnx binary
+*.gz binary
+*.zip binary
+*.so binary
+atom/app/sony/sony_ctl binary

@@ -1,0 +1,13 @@
+[Unit]
+Description=Cameras AP without internet sharing (no forwarding from the AP)
+After=network-pre.target
+Before=network.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/bridge-ap-nonat.sh start
+ExecStop=/usr/local/bin/bridge-ap-nonat.sh stop
+
+[Install]
+WantedBy=multi-user.target

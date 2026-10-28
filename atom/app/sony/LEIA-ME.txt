@@ -1,0 +1,54 @@
+SONY (Alpha, FX, ZV) NO ATOM BRIDGE
+===================================
+
+As Sony falam com o bridge pelo Camera Remote SDK da Sony, atraves do nosso ajudante (sony_ctl). O repositorio traz o
+sony_ctl ja compilado com as bibliotecas da Sony de que precisa ao lado (so isto: a licenca da Sony deixa distribui-las
+apenas como parte da aplicacao; ver AVISO-SONY.md). O update do Atom instala-o: nao e preciso descarregar nada.
+Os avisos de licenca (da Sony e dos outros) aceitam-se uma vez, antes de a consola carregar (licencas.py).
+
+
+1. RECOMPILAR O SONY_CTL (so quem mexe no sony_ctl.cpp, ou para outra versao do SDK)
+---------------------------------------------------------------------------------
+  Descarregar o SDK da Sony (gratis, com conta Sony; aceitar a licenca dela):
+    https://support.d-imaging.sony.co.jp/app/sdk/en/index.html   (Linux 64 bit (PC): CrSDK_vX.XX.XX_..._Linux64PC.zip)
+  Compilar para esta pasta (o .zip ou a pasta extraida; nunca pôr o SDK no repositorio):
+    bash atom/app/sony/compilar.sh <CrSDK_....zip> atom/app/sony
+  O compilar.sh copia as bibliotecas da Sony para aqui e escreve o sony_ctl.fonte (o CI ve se o sony_ctl corresponde
+  ao sony_ctl.cpp). Fazer commit do sony_ctl, das bibliotecas e do sony_ctl.fonte.
+  No proprio Atom, com o SDK la:  sudo SONY_SDK=<pasta ou .zip> FORCE_SONY=1 bash atom-install/install_atom.sh
+
+
+2. NA CAMARA (exemplo: A7 IV; os menus das outras sao parecidos)
+   (Os nomes dos menus mudam com o modelo e o firmware: o que se pede e o modo Remote Shooting / PC Remote e o Wi-Fi em
+   modo Access Point; se um nome nao bate, procurar pelo manual da camara.)
+-----------------------------------------------------------------
+  Wi-Fi, sem gateway (o melhor):
+    Network > Wi-Fi > Access Point Set.: escolher o Wi-Fi das cameras do Atom (o mesmo das Canon) e a password.
+    Network > Wi-Fi > IP Address: ver o IP que a camara recebeu (convem reserva-lo no AP, como nas Canon).
+    Network > Transfer/Remote > PC Remote Function (Remote Shoot Function nos firmwares recentes):
+      PC Remote / Remote Shooting: On;  Connection Method: Wi-Fi Access Point (Access Point mode)
+    Na primeira ligacao a camara pergunta se aceita o "Atom Bridge" (pairing): OK. Depois liga sozinha.
+    Modelos que so ligam pela rede com SSH (FX6, Z200/Z300, NX800, A7 V, A7R VI...): Network > Access Authen. Settings >
+    utilizador e password, e escrever os mesmos ao acrescentar a camara no bridge.
+  USB:
+    PC Remote / Remote Shooting: On, Connection Method: USB. O numero de serie aparece em DEVICES > SONY > Sony SDK.
+
+  Quem liga por onde (a lista completa, com o SDK 2.02): sony.py, MODELOS. O A7 IV liga por Wi-Fi e USB (sem cabo de rede).
+
+
+3. NO BRIDGE
+------------
+  Consola: ESC > DEVICES > SONY > Add a Sony (ligacao, modelo, IP ou serie, nome).  Pagina: secao SONY > + ADD.
+  Cada Sony e um alvo de REC (sony1, sony2...): REC/STOP confirmados pelo estado da camara, bateria (% e minutos),
+  tempo de cartao, ISO/iris/obturador, e SET TC escreve o Time Code Preset (o LTC do bridge, com a camara parada).
+  Nos modelos em que o REC do SDK e um interruptor (A1, A9 II, A7S III, A7R IV, A7C, RX0 II) o ajudante trata disso.
+
+
+4. FICHEIROS
+------------
+  sony_ctl.cpp     o ajudante: fala com o SDK e com o bridge por linhas (comandos no stdin, eventos JSON no stdout)
+  gerar_modelos.py le a lista de modelos do SDK instalado (CrDefines.h): um modelo novo num SDK novo entra sozinho
+  compilar.sh      compila o sony_ctl e copia para aqui as bibliotecas da Sony
+  AVISO-SONY.md    a licenca da Sony e os termos que o operador aceita;  OSS-NOTICES.md  libssh2, OpenSSL, libusb
+  ../sony.py       o lado do bridge;  ../sony_sim.py  o simulador do ajudante (testes, sem SDK nem camara)
+  sonys.json       as camaras (ao lado do bridge; 0600: pode ter passwords SSH, que nunca vao para a copia na pen)

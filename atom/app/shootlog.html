@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Camera Bridge — Shoot Log</title>
+    <style>
+        :root { color-scheme: dark; }
+        :root {
+            --bg: #0a0a0a;
+            --surface: #151515;
+            --surface2: #1c1c1c;
+            --border: #3d3d3d;
+            --text: #e8e8e8;
+            --text-dim: #a8a8a8;
+            --text-muted: #6a6a6a;
+            --red: #e63946;
+            --red-glow: rgba(230, 57, 70, 0.25);
+            --green: #2ec46a;
+            --green-glow: rgba(46, 196, 106, 0.25);
+            --orange: #f59e0b;
+            --mono: 'JetBrains Mono', 'SF Mono', monospace;
+            --sans: -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        * { box-sizing: border-box; }
+        body {
+            background: var(--bg); color: var(--text); font-family: var(--sans);
+            margin: 0; padding: calc(16px + env(safe-area-inset-top, 0px)) 16px calc(24px + env(safe-area-inset-bottom, 0px));
+            font-size: 15px;
+        }
+        h1 {
+            font-size: 15px; letter-spacing: 1px; text-transform: uppercase;
+            color: var(--text-dim); font-weight: 700; margin: 0;
+        }
+        .topbar {
+            display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+            gap: 10px; margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--border);
+        }
+        .topbar-left { display: flex; align-items: baseline; gap: 10px; }
+        .count { font-family: var(--mono); font-size: 12px; color: var(--text-muted); }
+        .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .btn {
+            background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+            border-radius: 8px; padding: 9px 14px; font-size: 12px; font-weight: 600;
+            letter-spacing: 0.5px; text-transform: uppercase; cursor: pointer; text-decoration: none;
+            font-family: var(--sans); display: inline-block;
+        }
+        .btn:active { transform: scale(0.97); }
+        .btn.danger { border-color: rgba(230,57,70,0.5); color: var(--red); }
+        .btn.flash-ok { background: var(--green-glow); border-color: var(--green); color: var(--green); }
+        .btn.flash-err { background: var(--red-glow); border-color: var(--red); color: var(--red); }
+        .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
+        table { width: 100%; border-collapse: collapse; min-width: 720px; }
+        thead th {
+            text-align: left; font-size: 10px; letter-spacing: 1px; text-transform: uppercase;
+            color: var(--text-muted); font-weight: 600; padding: 10px 12px;
+            background: var(--surface2); border-bottom: 1px solid var(--border);
+            position: sticky; top: 0;
+        }
+        tbody td {
+            padding: 10px 12px; border-bottom: 1px solid var(--surface2);
+            font-size: 14px; vertical-align: middle;
+        }
+        tbody tr:hover { background: var(--surface); }
+        tbody tr:last-child td { border-bottom: none; }
+        .col-time { font-family: var(--mono); font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+        .col-src { font-weight: 600; white-space: nowrap; }
+        .col-take { font-family: var(--mono); text-align: center; width: 70px; }
+        .col-clip { font-family: var(--mono); font-size: 12px; color: var(--text-dim); }
+        .col-del { width: 40px; text-align: center; }
+        .editable {
+            cursor: text; border-radius: 6px; padding: 6px 8px; margin: -6px -8px;
+            border: 1px solid transparent;
+        }
+        .editable:hover { border-color: var(--border); background: var(--surface2); }
+        .editable input, .editable select {
+            width: 100%; background: var(--surface2); color: var(--text);
+            border: 1px solid var(--orange); border-radius: 6px; padding: 6px 8px;
+            font-size: 14px; font-family: inherit;
+        }
+        .editable.note-cell { min-width: 220px; }
+        .event-tag {
+            font-family: var(--mono); font-size: 12px; padding: 3px 8px; border-radius: 5px;
+            background: var(--surface2); color: var(--text-dim); text-transform: uppercase;
+        }
+        .event-tag.start { color: var(--green); }
+        .event-tag.fault { color: var(--red); }
+        .event-tag.no-good { color: var(--red); }
+        .event-tag.good { color: var(--green); }
+        .del-btn {
+            background: none; border: none; color: var(--text-muted); font-size: 16px;
+            cursor: pointer; padding: 4px 8px; border-radius: 6px; line-height: 1;
+        }
+        .del-btn:hover { color: var(--red); background: var(--red-glow); }
+        .flash-cell { animation: flashOk 0.9s ease; }
+        .flash-cell.err { animation: flashErr 0.9s ease; }
+        @keyframes flashOk {
+            0% { background: var(--green-glow); }
+            100% { background: transparent; }
+        }
+        @keyframes flashErr {
+            0% { background: var(--red-glow); }
+            100% { background: transparent; }
+        }
+        .empty { padding: 40px 16px; text-align: center; color: var(--text-muted); font-size: 13px; }
+        .back-link { color: var(--text-muted); font-size: 12px; text-decoration: none; }
+        .back-link:hover { color: var(--text); }
+    </style>
+</head>
+<body>
+    <div class="topbar">
+        <div class="topbar-left">
+            <h1>Shoot Log</h1>
+            <span class="count" id="count">--</span>
+        </div>
+        <div class="actions">
+            <a class="btn" href="/">&larr; Control</a>
+            <a class="btn" href="/eventlog">Event Log</a>
+            <button class="btn" id="btnReload" onclick="load()">Reload</button>
+            <button class="btn" id="btnNew" onclick="newLog()">New Log</button>
+            <a class="btn" href="/api/log/shoot.csv" download="shoot_log.csv">Download CSV</a>
+        </div>
+    </div>
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <!-- Apagar em primeiro de proposito: o dedo/rato que vai
+                         carregar aqui ve logo ao lado a hora, a fonte e o
+                         evento do que esta prestes a apagar, sem ter de
+                         percorrer a tabela primeiro. -->
+                    <th></th>
+                    <th>Time</th>
+                    <th>Source</th>
+                    <th>Action</th>
+                    <th>Take</th>
+                    <th>Note</th>
+                    <th>Name</th>
+                    <th>Clip</th>
+                </tr>
+            </thead>
+            <tbody id="rows"></tbody>
+        </table>
+        <div class="empty" id="emptyMsg" hidden>Shoot log is empty.</div>
+    </div>
+
+<script>
+// Sessao do PIN (acesso.py): se o bridge pedir o PIN (sessao expirada), vai-se ao ecra do PIN e volta-se aqui depois.
+(function () {
+    const f = window.fetch;
+    window.fetch = function () {
+        return f.apply(this, arguments).then(r => {
+            if (r.status === 401 && r.headers.get('content-type') && r.headers.get('content-type').indexOf('json') >= 0)
+                r.clone().json().then(d => { if (d && d.login) location.replace(d.login + '?next=' + encodeURIComponent(location.pathname + location.search)); }).catch(() => {});
+            return r;
+        });
+    };
+})();
+</script>
+    <script>
+        // Eventos fechados de proposito, tal como o backend os recusa --
+        // ver SHOOT_LOG_EVENTS em camera_bridge.py. Um dropdown em vez de
+        // texto livre evita mandar um evento que o backend rejeita.
+        const EVENTS = ["start", "stop", "slate", "mark",
+                        "good", "no-good", "fault", "note"];
+        let _rows = [];
+        // IDs actualmente a ser editados -- o reload periodico nao lhes
+        // toca, para nao apagar uma edicao a meio.
+        let _editing = new Set();
+
+        async function api(endpoint, body) {
+            try {
+                const r = await fetch('/api/' + endpoint, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(body || {})
+                });
+                return await r.json();
+            } catch (e) {
+                return {error: String(e)};
+            }
+        }
+
+        async function load() {
+            const btn = document.getElementById('btnReload');
+            btn.disabled = true;
+            try {
+                const d = await fetch('/api/log/shoot?limit=500').then(r => r.json());
+                _rows = d.rows || [];
+                document.getElementById('count').textContent = _rows.length + ' entries';
+                render();
+            } catch (e) {
+                document.getElementById('count').textContent = 'load failed';
+            }
+            btn.disabled = false;
+        }
+
+        function render() {
+            const tbody = document.getElementById('rows');
+            document.getElementById('emptyMsg').hidden = _rows.length > 0;
+            // Preserva as linhas que estao a ser editadas agora mesmo --
+            // um reload nao lhes mexe, para nao interromper quem esta a
+            // escrever.
+            const existing = new Map([...tbody.querySelectorAll('tr')].map(tr => [tr.dataset.id, tr]));
+            tbody.innerHTML = '';
+            for (const row of _rows) {
+                if (_editing.has(row.id) && existing.has(row.id)) {
+                    tbody.appendChild(existing.get(row.id));
+                    continue;
+                }
+                tbody.appendChild(buildRow(row));
+            }
+        }
+
+        function buildRow(row) {
+            const tr = document.createElement('tr');
+            tr.dataset.id = row.id;
+
+            const tdDel = document.createElement('td');
+            tdDel.className = 'col-del';
+            const delBtn = document.createElement('button');
+            delBtn.className = 'del-btn';
+            delBtn.textContent = '✕';
+            delBtn.title = 'Delete this entry';
+            delBtn.onclick = () => deleteRow(row.id, row);
+            tdDel.appendChild(delBtn);
+            tr.appendChild(tdDel);
+
+            const tdTime = document.createElement('td');
+            tdTime.className = 'col-time';
+            tdTime.textContent = row.timestamp || '';
+            tr.appendChild(tdTime);
+
+            const tdSrc = document.createElement('td');
+            tdSrc.className = 'col-src';
+            tdSrc.textContent = row.source || '';
+            tr.appendChild(tdSrc);
+
+            tr.appendChild(makeSelectCell(row, 'action'));
+            tr.appendChild(makeInputCell(row, 'take', 'col-take', 'number'));
+            tr.appendChild(makeInputCell(row, 'note', 'note-cell', 'text'));
+
+            // O nome da sessao (a pagina de dados da take) e o do ficheiro gravado: so o bridge os escreve, por isso nao se editam aqui.
+            const tdName = document.createElement('td');
+            tdName.className = 'col-clip';
+            tdName.textContent = row.name || '';
+            tr.appendChild(tdName);
+
+            const tdClip = document.createElement('td');
+            tdClip.className = 'col-clip';
+            tdClip.textContent = row.clip || '';
+            tr.appendChild(tdClip);
+
+            return tr;
+        }
+
+        // Uma celula so ganha o input/select quando se clica nela -- o
+        // resto do tempo mostra so o valor, como texto normal. E o que
+        // substitui os tres prompt() em cadeia que isto tinha antes.
+        function makeSelectCell(row, field) {
+            const td = document.createElement('td');
+            td.className = 'editable';
+            const tag = document.createElement('span');
+            tag.className = 'event-tag ' + (row[field] || '');
+            tag.textContent = row[field] || '';
+            td.appendChild(tag);
+            td.onclick = () => {
+                if (td.querySelector('select')) return;
+                td.innerHTML = '';
+                const sel = document.createElement('select');
+                EVENTS.forEach(a => {
+                    const opt = document.createElement('option');
+                    opt.value = a; opt.textContent = a;
+                    if (a === row[field]) opt.selected = true;
+                    sel.appendChild(opt);
+                });
+                td.appendChild(sel);
+                sel.focus();
+                _editing.add(row.id);
+                const commit = () => {
+                    _editing.delete(row.id);
+                    if (sel.value !== row[field]) {
+                        saveField(row, field, sel.value, td);
+                    } else {
+                        row[field] = sel.value;
+                        td.innerHTML = '';
+                        const t2 = document.createElement('span');
+                        t2.className = 'event-tag ' + sel.value;
+                        t2.textContent = sel.value;
+                        td.appendChild(t2);
+                    }
+                };
+                sel.onchange = commit;
+                sel.onblur = commit;
+            };
+            return td;
+        }
+
+        function makeInputCell(row, field, extraClass, type) {
+            const td = document.createElement('td');
+            td.className = 'editable ' + extraClass;
+            const span = document.createElement('span');
+            span.textContent = row[field] || (field === 'take' ? '' : '');
+            td.appendChild(span);
+            td.onclick = () => {
+                if (td.querySelector('input')) return;
+                td.innerHTML = '';
+                const inp = document.createElement('input');
+                inp.type = type;
+                inp.value = row[field] || '';
+                if (type === 'number') { inp.min = '1'; inp.step = '1'; }
+                td.appendChild(inp);
+                inp.focus();
+                inp.select();
+                _editing.add(row.id);
+                const commit = () => {
+                    _editing.delete(row.id);
+                    const val = inp.value.trim();
+                    if (val !== (row[field] || '')) {
+                        saveField(row, field, val, td);
+                    } else {
+                        td.innerHTML = '';
+                        const s2 = document.createElement('span');
+                        s2.textContent = val;
+                        td.appendChild(s2);
+                    }
+                };
+                inp.onblur = commit;
+                inp.onkeydown = (e) => {
+                    if (e.key === 'Enter') inp.blur();
+                    if (e.key === 'Escape') { inp.value = row[field] || ''; inp.blur(); }
+                };
+            };
+            return td;
+        }
+
+        async function saveField(row, field, value, td) {
+            const payload = {id: row.id};
+            payload[field] = value;
+            const r = await api('log/shoot/edit', payload);
+            const ok = !!(r && r.ok);
+            if (ok) row[field] = value;
+            td.innerHTML = '';
+            if (field === 'action') {
+                const tag = document.createElement('span');
+                tag.className = 'event-tag ' + (ok ? value : row[field] || '');
+                tag.textContent = ok ? value : (row[field] || '');
+                td.appendChild(tag);
+            } else {
+                const span = document.createElement('span');
+                span.textContent = ok ? value : (row[field] || '');
+                td.appendChild(span);
+            }
+            td.classList.add('flash-cell');
+            if (!ok) td.classList.add('err');
+            setTimeout(() => td.classList.remove('flash-cell', 'err'), 900);
+            if (!ok) alert('Save failed: ' + ((r && r.error) || 'unknown error'));
+        }
+
+        async function deleteRow(id, row) {
+            if (!confirm('Delete this entry (' + row.source + ' ' + row.action + ' at ' +
+                          (row.timestamp || '').slice(11) + ')?')) return;
+            const r = await api('log/shoot/delete', {id: id});
+            if (r && r.ok) {
+                _rows = _rows.filter(x => x.id !== id);
+                render();
+                document.getElementById('count').textContent = _rows.length + ' entries';
+            } else {
+                alert('Delete failed: ' + ((r && r.error) || 'unknown error'));
+            }
+        }
+
+        async function newLog() {
+            if (!confirm('Archive the current shoot log and start a fresh one? Take numbers restart from 1.')) return;
+            const r = await api('log/shoot/new', {});
+            if (r && r.ok) load();
+            else alert('Failed: ' + ((r && r.error) || 'unknown error'));
+        }
+
+        load();
+        // Actualizacao suave -- nao mexe em linhas que estejam a ser
+        // editadas agora mesmo (ver render()).
+        setInterval(load, 15000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+Pre-visualizacao das paginas do comando de bolso (M5StickS3), no PC, sem a placa.
+
+O render.cpp compila o codigo de desenho verdadeiro do _esp32_tools/m5stick_f6_remote/m5stick_f6_remote.ino (extraido pelo mkrender.py) com a
+biblioteca de ecra M5GFX verdadeira (os mesmos tipos de letra e larguras) e desenha varios cenarios (a gravar, pronto, sem pista, Wi-Fi bom e fraco,
+sem Wi-Fi, bateria, desbloqueado, estado desconhecido, nome de rede longo). Serve para ver se o texto cabe e nao se sobrepoe antes de gravar.
+
+  git clone https://github.com/m5stack/M5GFX /tmp/M5GFX
+  bash testes/m5stick_preview/build.sh /tmp/M5GFX          (escreve testes/m5stick_preview/paginas.png)
+
+Nao mostra o brilho, o cintilar nem o tempo real do ecra: so a disposicao. paginas.png e a ultima que se gerou.

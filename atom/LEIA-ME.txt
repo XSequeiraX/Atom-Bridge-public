@@ -1,0 +1,107 @@
+atom/app         o codigo do bridge que corre no Atom (/opt/camera-bridge): a fonte unica. Edita-se aqui.
+atom-install     o instalador (install_atom.sh): copia atom/app para o Atom, com copia de seguranca e reposicao
+                 automatica se o bridge novo nao arrancar (lib_app.sh). atom-install/patches e so historia.
+
+Actualizar o Atom: git push e, na consola do Atom, GLOBAL SETTINGS > Update from GitHub.
+Trazer o codigo do Atom para aqui (se alguem o mudou la): atom-install/exportar_codigo.sh (Taildrop para o PC).
+
+Modulos de atom/app
+  bridge.py        arranca o bridge (Flask, porta 8080; o camera-bridge.service corre este ficheiro).
+  nucleo.py        o bridge em si: estado, camaras, REC de grupo, shoot log, relogio, avisos, ciclos de fundo.
+  rotas_*.py       a API por area, sobre o estado do nucleo: paginas (e login), aparelhos (e REC), gateways,
+                   relogio, registos (shoot log, event log, copias), claquete, sistema (status, rede, servicos...).
+  ui.html          a pagina completa;  view.html  a pagina so de leitura;  eventlog/shootlog/f6card .html  paginas auxiliares.
+  c3_bm.py         a BMPCC principal pelo gateway C3 (Wi-Fi): sessao, descoberta por beacon UDP 5172.
+  bmfleet.py       BMPCC extra (bm2, bm3...), cada uma no seu C3: alvos de REC com a mesma interface das outras frotas.
+  bmcam.py         telemoveis com a app Blackmagic Camera (iPhone; Android 3.4+ por validar), REST/WebSocket.
+  gopro.py         GoPro pelos gateways ESP32-S3 (ate 4; cada GoPro mantem o id do bridge: gp1..gp3 no primeiro
+                   gateway, gp11..gp13 no segundo, gp21..gp23 no terceiro).
+  canon_ccapi.py   Canon (CCAPI). So grava em modo video (o modo muda-se na propria camara).
+  sony.py          Sony (Camera Remote SDK): as camaras (sonys.json), o REC confirmado e o estado; fala com o ajudante
+                   sony/sony_ctl (ja compilado, com as bibliotecas da Sony: ver sony/LEIA-ME.txt, AVISO-SONY.md).
+                   sony_sim.py e o simulador do ajudante (testes, sem SDK nem camara).
+  licencas.py      os avisos de licenca, aceites uma vez antes da consola e da pagina (termos.json).
+  acesso.py        o PIN da pagina para quem nao esta no Atom nem na Tailscale.
+  f6_ctl.py, frc8.py, f6_ltc.py, f6_card.py, usb_bridge.py   Zoom F6 (USB-MIDI, protocolo FRC-8: por cabo ao Atom, ou pelo gateway S3
+                   dedicado, que o liga ao Atom por Wi-Fi), jam de LTC, cartao.
+  tc1_ble.py, ltc_audio.py                                    TC-1 e leitura de LTC.
+  claquete.py      cena, reel e take do clip seguinte, enviados entre takes a BMPCC (principal e extra, categoria 12
+                   do protocolo Blackmagic) e aos iPhones (/slates/nextClip). Consola: GLOBAL SETTINGS > SLATE.
+  tc_vigia.py      desvio do timecode de cada BMPCC para o LTC do Atom (pela mudanca do segundo; os iPhones medem-no
+                   no bmcam.py). Mais de um frame (descontado o erro) da aviso; consola: TIME e a linha de cada camara.
+  perfis.py        perfis do rig (profiles.json): camaras armadas, modo estrito, claquete e gateways ligados, com
+                   nome; aplicar nunca a gravar. Consola: GLOBAL SETTINGS > RIG > Rig profiles.
+  copia.py         copia de seguranca da configuracao num so JSON, numa pen USB ligada ao Atom (montada pelo bridge),
+                   e repor. Sem segredos (token dos gateways, Wi-Fi, PIN, password do SFTP). Consola: GLOBAL SETTINGS >
+                   RIG > Backup / restore. API: GET|POST /api/backup/usb, POST /api/backup/restore.
+  simulador.py     gateways simulados (C3 com BMPCC, S3 com GoPros): o modo de treino da consola (GLOBAL SETTINGS >
+                   TRAINING > Demo mode, /api/demo) e os testes; ver o README.
+  bridge_client.py cliente da API do servico USB (bridge-usb).
+  fw_ota.py        firmware dos gateways C3 e S3 por Wi-Fi (e o C3 por USB com o mpremote).
+  gw_usb.py        configuracao inicial e actualizacao de C3 e S3 por USB, a partir do Atom: identifica a placa (esptool), grava o
+                   firmware (S3: imagem completa se em branco, so a aplicacao se ja funciona; C3: MicroPython + ficheiros) e o Wi-Fi.
+  vigiado.py       poe os ciclos de fundo (gateways, USB, vigias) a voltar a correr se levantarem uma excepcao.
+
+Ficheiros de configuracao (na pasta do bridge, fora do repositorio, nunca tocados pelo instalador)
+  settings.json    alvos de REC, jam de LTC...        c3.json      {"enabled", "via": "bluez", "host"} do C3 principal
+  bmpccs.json      as BMPCC extra {"cams": {"bm2": {"name", "host"}}}
+  gopros.json      {"lead_ms", "gateways": [{"idx", "host", "enabled", "name"}], "memoria": {host: idx}}: os S3 (lista vazia = nenhum;
+                   "memoria" faz um S3 reinserido voltar ao mesmo numero). O formato antigo (host no topo) ainda se le.
+  bmpccs.json tem tambem "memoria" {host: {id, name}}.   gw_fw.json  {"auto": true}: actualizacao automatica dos gateways
+  iphones.json, devices.json, profiles.json, sftp.json
+
+BMPCC: a principal ("bmpcc") passa pelo C3 (c3.json "via": "c3") ou, como plano B, pelo Bluetooth do Atom
+("via": "bluez"; na consola: linha da BMPCC > Connection, ou Bluetooth > Pair a new device > Use it as the BMPCC).
+As extra so existem por C3. O FIZ nao esta no bridge: e assunto so do C3.
+
+Firmware dos gateways: sempre pelo Atom (fw/c3 e fw/s3/gopro_gw.bin vem do repositorio, o do S3 compilado pelo GitHub
+em .github/workflows/s3-firmware.yml; fw/s3/escrito.json diz o que cada S3 recebeu; um S3 a que o Atom nunca gravou nada
+so se actualiza se o pedido o nomear, na consola: GLOBAL SETTINGS > Update gateways). A actualizacao automatica vem desligada; ligada (no mesmo menu), so actua com o rig parado ha 10 min.
+  GET  /api/gateways/firmware            estado de todos (ok | outdated | unreachable | needs_usb | unknown) e a ultima actualizacao
+  POST /api/gateways/firmware {ids}      actualiza os atrasados (todos se omitido; recusado a gravar);  {"auto": bool} liga/desliga
+
+Configuracao por USB (qualquer gateway)
+  GET  /api/gateways/usb                 portas USB, ferramentas (esptool, mpremote, pyserial), imagens e se ha Wi-Fi das cameras
+  POST /api/gateways/usb {port, use_ap, wifi:{ssid,psk}}   identifica, grava e configura; recusado a gravar; sem segredos no registo
+
+Brilho do ecra (Fn+F6 menos, Fn+F7 mais)
+  O servico bridge-brilho (atom/app/brilho.py) le as teclas e muda /sys/class/backlight. Passos de 10%, nunca abaixo de 5%.
+  Liga-se na primeira instalacao; depois: sudo systemctl enable --now bridge-brilho   (desligar: disable --now).
+  Ver o ecra:                sudo python3 /opt/camera-bridge/brilho.py --estado
+  Testar sem teclado:        sudo python3 /opt/camera-bridge/brilho.py +     (ou -)
+  Se o --estado disser que nao ha backlight, o brilho deste ecra nao se controla pelo Linux.
+
+TAMPA DO PORTATIL
+  Fechar a tampa nao suspende nem desliga o Atom: o instalador cria /etc/systemd/logind.conf.d/bridge-lid.conf (HandleLidSwitch*=ignore).
+  A gravacao, o Wi-Fi, o Bluetooth, o LTC e o shoot log continuam. O bridge-brilho trata do resto:
+    fechar  -> bloqueia a consola (o bloqueio do Win+L e do F12; so se ha PIN da pagina) e apaga a retroiluminacao;
+    abrir   -> repoe o brilho. NAO desbloqueia: so o PIN da pagina o faz.
+  O portatil fechado aquece mais: ver CPU na linha de cima da consola (amarelo acima de 65 C, vermelho acima de 80 C).
+  Se a tampa nao for detectada, o log do servico avisa (journalctl -u bridge-brilho): "lid: this laptop does not report it".
+
+DADOS DA TAKE (a mesma pagina em todos os clientes)
+  Quando a ultima camara pára, o bridge pede a pagina de dados da take (/api/status: take_pending) e ela abre em TODOS os clientes:
+  a consola (abre sozinha; tecla P para abrir a mao) e a pagina web (uma janela por cima de tudo, tambem no iPad). Campos: nome da sessao (um nome novo volta a numerar as
+  takes a 1), cena (ate 5 letras ou digitos), reel (um numero de 1 a 999), plano seguinte,
+  bom/mau da take que acabou e uma nota. Tudo opcional. Quem guardar ou saltar (SKIP / Esc) fecha-a nos outros.
+  Enquanto estiver por fechar o BRIDGE recusa um REC novo vindo de qualquer cliente (consola, pagina, controladores USB):
+  409 "Take data pending". Parar nunca se recusa. Desligar o bloqueio: consola, Slate, "Take data lock" (ou POST /api/slate/take/lock).
+
+Pacotes do sistema (Debian)
+  Actualizam-se so pelo terminal (sudo apt update && sudo apt full-upgrade): a consola e a API ja nao o fazem.
+  O kernel fica bloqueado (/etc/apt/preferences.d/bridge-kernel): o 6.12.113 deixa o dongle do AP (ath9k_htc) sem subir a interface.
+  Para o actualizar de proposito: sudo rm /etc/apt/preferences.d/bridge-kernel e depois o full-upgrade; confirma o AP antes de o deixar.
+  O kernel em uso nunca e apagado pelo autoremove. O firmware do dongle e o pacote firmware-ath9k-htc (o instalador instala-o).
+
+A API
+  Toda a API esta em docs/API.md (gerada das rotas do bridge (nucleo.py e rotas_*.py) por atom/app/api_check.py --docs; o mesmo script verifica as regras de
+  nomes e se os clientes chamam rotas que existem). Em resumo:
+    - Devices: cada aparelho tem um id unico e tudo sobre ele fica em /api/devices/<id>/...; o tipo (canon, iphone, gopro, bmpcc,
+      bmpcc_extra, f6) e um campo da resposta, nunca parte do caminho. GET /api/devices[?type=canon] lista, GET /api/devices/<id> le um,
+      POST /api/devices {type, ...} acrescenta, POST /api/devices/<id>/<accao> actua (rec, connect, af, remove, restore, ...),
+      POST /api/devices/batch {action, type, ...} actua sobre varios (order, reset, settings_polling, lead).
+    - REC: POST /api/rec (os alvos), POST /api/devices/<id>/rec (um so, de qualquer tipo), POST /api/rec/targets {id, on}.
+    - /api/status continua a trazer iphones, gopros e bmpcc_extras.
+    - Gateways: /api/gateways/c3/..., /api/gateways/s3/... (levam "gw"; omitido = o primeiro), /api/gateways/usb, /api/gateways/firmware.
+    - Tempo: /api/time/...   Registos: /api/log/...   Claquete: /api/slate (cena/reel) e /api/slate/beep.
+  Todo o POST e todo o erro devolvem {"ok": bool, "error": texto}.
