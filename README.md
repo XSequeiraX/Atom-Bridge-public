@@ -12,10 +12,16 @@ Funciona numa consola (curses) e numa página web (telemóvel, iPad).
 | Blackmagic Pocket Cinema Camera | Bluetooth LE, pelo gateway C3 (Wi-Fi) | REC, estado completo e timecode. O Bluetooth do Atom fica como plano B |
 | BMPCC extra (`bm2`, `bm3`...) | Cada uma no seu gateway C3 | REC confirmado pela câmara, bateria e timecode. Até 8 |
 | Zoom F6 | USB-MIDI (protocolo FRC-8), de duas maneiras: **por cabo ao Atom**, ou **pelo gateway S3 dedicado** (cabo USB do F6 ao S3, que fala com o Atom por **Wi-Fi**: modo "F6 com o Atom") | REC/STOP com confirmação do próprio F6. O S3 pode também comandar o F6 sozinho, sem o Atom ("F6 autónomo", ver mais abaixo) |
-| Telemóveis com a app Blackmagic Camera: iPhones (testado); Android (a app 3.4 ou mais nova também tem controlo REST: **por validar**) | Wi-Fi, REST | Vários telemóveis como alvos de REC. O tipo no bridge continua a chamar-se `iphone` |
+| Telemóveis com a app Blackmagic Camera: iPhones e Android (a app 3.4 ou mais nova; **testados**) | Wi-Fi, REST | Vários telemóveis como alvos de REC. O tipo no bridge continua a chamar-se `iphone`. **Testar a gravação antes de uma take a sério** (ver abaixo) |
 | GoPro HERO8 | Bluetooth LE, via gateway(s) ESP32-S3 | Relógio por QR (GoPro Labs). Até 4 gateways S3 (mais alcance, mais GoPro) |
 | Sony (Alpha, FX, ZV: A7 IV, FX3, A1, A9 III, ZV-E1... os modelos do Camera Remote SDK) | **Wi-Fi sem gateway** (a câmara entra no AP das câmaras, como as Canon) ou USB | REC confirmado pela câmara, bateria, cartão, ISO/íris/obturador, Time Code Preset. Pelo SDK da Sony (o ajudante já compilado vem no repositório). Ver `atom/app/sony/LEIA-ME.txt` e `AVISOS-LICENCAS.md` |
 | TC-1 (Deity) | Cabo ou Bluetooth | Leitura de LTC para o relógio do bridge |
+
+**Telemóveis (iPhone e Android): o bitrate pode ser demais.** Com a app Blackmagic Camera, um formato de bitrate alto pode ser mais
+do que a memória do telemóvel consegue escrever (ou do que lhe cabe), e a gravação falha a meio de uma take. O bridge avisa quando
+isso acontece (o telemóvel parou sozinho, alarme amarelo), mas a take já está perdida. Antes de uma take a sério: grava **vários minutos
+no formato e bitrate reais** (não basta o teste de 3 segundos do assistente, que só prova a ligação) e vê no telemóvel se a gravação
+chega ao fim e quanto espaço sobra. Se não aguentar, baixa o bitrate ou o formato na app, ou usa um cartão/disco mais rápido.
 
 O comando FIZ (Magic FIZ) **não faz parte do bridge**: vive só dentro do gateway C3 e só no modo Autónomo, em
 que o C3 dispara por ele a sua BMPCC. No modo Bridge o C3 nem o procura. O bridge não o vê nem mostra o estado dele.

@@ -1,7 +1,8 @@
 """O iPhone com a app Blackmagic Camera (3.4 ou mais nova) como alvo de REC do bridge.
 
-A app existe tambem para Android, e a versao 3.4 dele traz controlo remoto por REST (2026-07, noticias; nao ha ainda teste com o
-bridge: porta, certificado e rotas por confirmar). Tudo o que segue foi testado so com iPhone.
+A app existe tambem para Android (3.4 ou mais nova) e funciona com o bridge (testado). Atencao ao bitrate: um formato pesado pode
+ser mais do que o telemovel escreve, e a gravacao falha a meio de uma take; testar varios minutos no formato real antes de filmar.
+O que segue foi medido com um iPhone.
 
 A app tem um servidor web (HTTPS, porta 4444, certificado proprio) com a REST
 API das camaras Blackmagic (ver os YAML que a app serve em

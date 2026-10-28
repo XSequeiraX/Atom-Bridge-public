@@ -13,7 +13,7 @@ Modulos de atom/app
   ui.html          a pagina completa;  view.html  a pagina so de leitura;  eventlog/shootlog/f6card .html  paginas auxiliares.
   c3_bm.py         a BMPCC principal pelo gateway C3 (Wi-Fi): sessao, descoberta por beacon UDP 5172.
   bmfleet.py       BMPCC extra (bm2, bm3...), cada uma no seu C3: alvos de REC com a mesma interface das outras frotas.
-  bmcam.py         telemoveis com a app Blackmagic Camera (iPhone; Android 3.4+ por validar), REST/WebSocket.
+  bmcam.py         telemoveis com a app Blackmagic Camera (iPhone e Android 3.4+, testados; cuidado com o bitrate: README), REST/WebSocket.
   gopro.py         GoPro pelos gateways ESP32-S3 (ate 4; cada GoPro mantem o id do bridge: gp1..gp3 no primeiro
                    gateway, gp11..gp13 no segundo, gp21..gp23 no terceiro).
   canon_ccapi.py   Canon (CCAPI). So grava em modo video (o modo muda-se na propria camara).

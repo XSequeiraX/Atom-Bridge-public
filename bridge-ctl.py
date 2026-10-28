@@ -355,8 +355,10 @@ Reserve its IP (DHCP) or set it on the body. C connects.
 ESC > DEVICES > IPHONE > Add iPhone. Name, IP, port (4444).
 Blackmagic Camera open, web server on, same network.
 iOS Settings > Privacy > Local Network > Blackmagic Camera on.
-~ Android: the same app (3.4 or later) also has REST remote control. Not
-~ tested with the bridge yet: the port and routes may differ.
+Android: the same app (3.4 or later) works the same way (tested).
+! Bitrate: a heavy format can be more than the phone can write, and the
+! recording fails mid-take. Test several minutes at the real format before
+! a real take (the wizard's 3-second test only proves the link).
 The bridge writes scene + take into the clip slate; G / N set good take.
 ! Timecode stuck: turn the network timecode option off in the app.
 
