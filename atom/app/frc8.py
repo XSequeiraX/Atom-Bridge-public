@@ -61,6 +61,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from curto import erro
+
 NOME = "F Series"
 HDR = bytes([0xF0, 0x52, 0x00, 0x74, 0x00, 0x00, 0x00, 0x63])
 HANDSHAKE = HDR + bytes([0x00, 0x01, 0xF7])
@@ -270,9 +272,9 @@ class Link:
                 else:
                     self._session_gw(*gw)
             except OSError as e:
-                self.error = str(e)
+                self.error = erro(e)
             except Exception as e:      # nunca deixar a thread morrer
-                self.error = repr(e)
+                self.error = erro(e)
                 self.log("F6 (FRC): %r" % e)
             if self.connected:
                 self.log("F6 disconnected (%s)" % ("FRC-8 link" if node else "S3 %s: %s" % (gw[1], self.error)))

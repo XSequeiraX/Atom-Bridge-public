@@ -36,6 +36,7 @@ import sony
 import gopro
 
 import bmfleet as bmfleet_mod
+from curto import curto
 
 from vigiado import vigiado
 
@@ -275,6 +276,7 @@ timecode_char_path = None
 
 
 def log_event(msg):
+    msg = curto(msg)
     timestamp = time.strftime("%H:%M:%S")
     entry = f"[{timestamp}] {msg}"
     _gravar_evento(entry)
@@ -852,6 +854,7 @@ def note_fault(reason, kind="fault"):
     if kind == "warn" and state.get("_fault_time") and state.get("_fault_kind") == "fault":
         log_event(f"WARNING (not shown, a fault is pending): {reason}")
         return
+    reason = curto(reason)
     state["_fault_time"] = time.time()
     state["_fault_reason"] = reason
     state["_fault_kind"] = kind
@@ -1366,7 +1369,7 @@ def timecode_time_of_day():
     return cand
 
 CLOCK_SOURCE_LABELS = {"bm": "BM TC", "ltc": "LTC",
-                       "ntp": "NTP", "iphone": "iPhone"}
+                       "ntp": "NTP", "iphone": "Mobile"}
 
 NTP_MARKER = "/run/systemd/timesync/synchronized"
 
@@ -3145,7 +3148,7 @@ def _dev_resolve(cid):
     cam = canon_ccapi.CAMERAS.get(cid)
     if cam is not None:
         return "canon", cam, "ativo"
-    for tipo, frota in (("iphone", iphs), ("gopro", gofleet), ("bmpcc_extra", bmfleet), ("sony", sonys)):
+    for tipo, frota in (("mobile", iphs), ("gopro", gofleet), ("bmpcc_extra", bmfleet), ("sony", sonys)):
         cam = frota.get(cid)
         if cam is not None:
             return tipo, cam, "ativo"
@@ -3157,7 +3160,7 @@ def _dev_resolve(cid):
         return "bmpcc", d["saved_bmpcc"][cid], "removido"
     c = _dev_iphones_tirados_cfg().get(cid)
     if c is not None:
-        return "iphone", c, "removido"
+        return "mobile", c, "removido"
     c = sonys.removed_list().get(cid)
     if c is not None:
         return "sony", c, "removido"

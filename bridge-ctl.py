@@ -202,7 +202,7 @@ REC in the first column: the row is a REC target (SPACE).
 R records / stops the targets.
 
 # Top line
-NTP / iPhone / CLK: the clock sources. Red = none confirmed.
+NTP / Mobile / CLK: the clock sources. Red = none confirmed.
 Right side: AC or BATTERY, CPU C, RAM %, swap, LOAD %.
   LOAD 100% = busy; above it, processes queue.
   Yellow = high, red = too high.
@@ -343,7 +343,7 @@ Get: needs the uplink (INT WI-FI) on a network with internet.
 # Logs
 NEW archives the current shoot log or event log and starts an empty one.
 """)),
-    ("Add a camera / iPhone / gateway", lambda: help_lines("""
+    ("Add a camera / mobile / gateway", lambda: help_lines("""
 New devices: SPACE on the row makes it a REC target.
 
 # Canon
@@ -351,11 +351,10 @@ ESC > DEVICES > CANON > Add Canon.
 Name, CCAPI IP, port (8080; 443 = https).
 Reserve its IP (DHCP) or set it on the body. C connects.
 
-# iPhone (Blackmagic Camera)
-ESC > DEVICES > IPHONE > Add iPhone. Name, IP, port (4444).
-Blackmagic Camera open, web server on, same network.
-iOS Settings > Privacy > Local Network > Blackmagic Camera on.
-Android: the same app (3.4 or later) works the same way (tested).
+# Mobile: iPhone or Android (Blackmagic Camera)
+ESC > DEVICES > MOBILE > Add mobile. Name, IP, port (4444).
+Blackmagic Camera open (Android: 3.4 or later), web server on, same network.
+iPhone only: iOS Settings > Privacy > Local Network > Blackmagic Camera on.
 ! Bitrate: a heavy format can be more than the phone can write, and the
 ! recording fails mid-take. Test several minutes at the real format before
 ! a real take (the wizard's 3-second test only proves the link).
@@ -745,11 +744,16 @@ def eh_bm_extra(rid):
     return tipo_de(rid) == "bmpcc_extra"
 
 
+TIPO_SINONIMO = {"iphone": "mobile"}
+
+
 def devs_tipo(dv, tipo):
     """Os devices de um tipo no GET /api/devices (o `dv` do Snapshot), como {id: item}, pela ordem da lista."""
     out = {}
     for d in (dv or {}).get("devices") or []:
-        if isinstance(d, dict) and d.get("type") == tipo and d.get("id"):
+        # "iphone" e o nome antigo do tipo "mobile" (bridges de antes da troca): os dois valem para os dois.
+        t = TIPO_SINONIMO.get(d.get("type"), d.get("type")) if isinstance(d, dict) else None
+        if t == TIPO_SINONIMO.get(tipo, tipo) and d.get("id"):
             out[d["id"]] = d
     return out
 
@@ -782,7 +786,7 @@ def nao_canon(rid):
 
 
 CLOCK_ORDER = ("bm", "ltc", "ntp", "iphone")
-CLOCK_LABELS = {"bm": "BM TC", "ltc": "LTC", "ntp": "NTP", "iphone": "iPhone"}
+CLOCK_LABELS = {"bm": "BM TC", "ltc": "LTC", "ntp": "NTP", "iphone": "Mobile"}
 
 
 class _Reabrir(Exception):
@@ -833,6 +837,49 @@ def gw_token_cab():
     return {}
 
 
+# --- erros de rede em texto curto ------------------------------------------
+# Copia de atom/app/curto.py (a consola e um ficheiro so); o CI confirma que dao o mesmo.
+# Ordem importa: a primeira causa que aparece no texto ganha.
+_CAUSAS = [
+    (re.compile(r"timed? ?out|ConnectTimeout|ReadTimeout|TimeoutError", re.I), "no answer (timeout)"),
+    (re.compile(r"Connection refused|Errno 111\b|ConnectionRefusedError", re.I), "connection refused"),
+    (re.compile(r"No route to host|Network is unreachable|Errno 11[03]\b|Errno 101\b", re.I), "unreachable"),
+    (re.compile(r"Name or service not known|Temporary failure in name resolution|getaddrinfo failed|"
+                r"nodename nor servname|NameResolutionError|Errno -[23]\b", re.I), "name not found"),
+    (re.compile(r"Connection reset|RemoteDisconnected|Connection aborted|ConnectionResetError|"
+                r"BrokenPipe|Broken pipe|closed connection without response", re.I), "connection dropped"),
+]
+_HTTP = re.compile(r"\b(\d{3}) (?:Client|Server) Error: ([^\n]*?) for url: \S+")
+_URLOPEN = re.compile(r"<urlopen error (.*)>", re.S)
+_HTTP2 = re.compile(r"HTTP Error (\d{3}): ")
+_TIPO = re.compile(r"\b[A-Za-z_][\w.]*(?:Error|Exception|Timeout|Disconnected): ")
+# Onde comeca o texto cru das bibliotecas (o que se troca pela causa).
+_CRU = re.compile(r"HTTPS?ConnectionPool\(|<urlopen error|\(Caused by|Max retries exceeded|\('Connection aborted|"
+                  r"\[Errno -?\d+\]|[A-Za-z_][\w.]*(?:Error|Exception|Timeout|Disconnected)\(|"
+                  r"\b(?:[A-Za-z_][\w.]*(?:Error|Timeout|Disconnected)): ")
+
+
+def curto(texto):
+    """O texto com o erro de rede encurtado. Sem erro de rede reconhecido, fica igual."""
+    if texto is None:
+        return texto
+    s = str(texto)
+    m = _HTTP.search(s)
+    if m:
+        return (s[:m.start()] + "HTTP %s %s" % (m.group(1), m.group(2).strip())).strip()
+    for padrao, causa in _CAUSAS:
+        if padrao.search(s):
+            c = _CRU.search(s)
+            if c is None:
+                return s
+            antes = s[:c.start()].rstrip(" :-(")
+            return (antes + ": " + causa) if antes else causa
+    m = _URLOPEN.search(s)
+    if m:
+        s = s[:m.start()] + m.group(1).strip() + s[m.end():]
+    return _HTTP2.sub(r"HTTP \1 ", _TIPO.sub("", s))
+
+
 def api(method, path, body=None, timeout=4, base=None, gw=False):
     """(status HTTP, JSON). Status 0 quando o bridge (ou o servico em `base`) nao responde.
     `gw=True`: `base` e um gateway que o bridge identificou (o C3 do status) e o POST leva o token dele. Nunca num GET, nem para
@@ -854,7 +901,7 @@ def api(method, path, body=None, timeout=4, base=None, gw=False):
         except Exception:
             return e.code, {}
     except Exception as e:
-        return 0, {"error": str(e)}
+        return 0, {"error": curto(str(e) or type(e).__name__)}
 
 
 def api_text(path, timeout=10):
@@ -865,7 +912,7 @@ def api_text(path, timeout=10):
     except urllib.error.HTTPError as e:
         return e.code, ""
     except Exception as e:
-        return 0, str(e)
+        return 0, curto(str(e) or type(e).__name__)
 
 
 def a_gravar_st(st, dv):
@@ -938,7 +985,7 @@ class Snapshot:
                 self.poll_once()
             except Exception as e:  # nunca deixar a thread morrer
                 with self.lock:
-                    self.ok, self.error = False, str(e)
+                    self.ok, self.error = False, curto(str(e))
             self.wake.wait(POLL_GRAVAR_SECONDS if self.gravando else POLL_SECONDS)
             self.wake.clear()
 
@@ -1001,7 +1048,7 @@ class Cache:
         try:
             v = fn()
         except Exception as e:
-            v = (0, {"error": str(e)})
+            v = (0, {"error": curto(str(e))})
         with self.lock:
             self.data[key] = (v, time.time())
             self.busy.discard(key)
@@ -1239,8 +1286,9 @@ def build_rows(st, dv):
             "net": str(c.get("ip") or "-"),
             "sem_video": bool(c.get("connected")) and not movie and not c.get("recording"),   # as Canon so gravam em video
         })
-    # iPhones com a app Blackmagic Camera (bmcam.py no bridge), um por linha.
-    for cid, ip in sorted(devs_tipo(dv, "iphone").items()):
+    # Telemoveis (iPhone ou Android) com a app Blackmagic Camera (bmcam.py no bridge), um por linha. Na consola o tipo
+    # interno continua "iphone" (ordens de menu guardadas, "camera-iphone"); no bridge chama-se "mobile".
+    for cid, ip in sorted(devs_tipo(dv, "mobile").items()):
         TIPOS[cid] = "iphone"
         cfg = " ".join(x for x in (
             ("ISO %s" % ip["iso"]) if ip.get("iso") else "",
@@ -2360,8 +2408,7 @@ class Ui:
         """Pedido que bloqueia o ecra (mostra que esta a esperar). `base`: outro servidor (o C3, por exemplo)."""
         self.scr.erase()
         self.put(1, 1, "%s ..." % label, self.attr("bold"))
-        self.put(3, 1, "waiting for the %s (up to %d s)" % ("bridge" if base is None else "gateway", timeout),
-                 self.attr("dim"))
+        self.put(3, 1, "waiting for the %s" % ("bridge" if base is None else "gateway"), self.attr("dim"))
         self.scr.refresh()
         out = api(method, path, body, timeout, base=base, gw=gw)
         try:
@@ -2373,7 +2420,7 @@ class Ui:
     def done(self, label, status, d, extra=None):
         """Mostra o resultado. Sem detalhes e a correr bem: so uma linha em
         baixo. Com detalhes ou com erro: uma pagina, para se ler o texto todo."""
-        err = d.get("error") if isinstance(d, dict) else None
+        err = curto(d.get("error")) if isinstance(d, dict) else None
         ok = status == 200 and not err and (d or {}).get("ok", True) is not False
         if ok and not extra:
             self.say("%s: ok" % label, 0)
@@ -2397,7 +2444,7 @@ class Ui:
             elif status == 0:
                 self.say("%s: bridge offline" % label, 2)
             else:
-                self.say("%s: %s" % (label, d.get("error") or "refused (%s)" % status), 2)
+                self.say("%s: %s" % (label, curto(d.get("error")) or "refused (%s)" % status), 2)
             try:
                 self.snap.poll_once()
             except Exception:
@@ -2447,7 +2494,7 @@ class Ui:
         if (src.get("ntp") or {}).get("ok"):
             tag, cor = "NTP", CLOCK_COR["ntp"]
         elif (src.get("iphone") or {}).get("ok"):
-            tag, cor = "iPhone", "green"
+            tag, cor = "Mobile", "green"
         else:
             tag, cor = "CLK", "red"         # sem origem confirmada
         # Ordem: hora, minuto, segundo, dia da semana, data (dd-mm-aaaa). A hora fica na mesma coluna que a
@@ -3814,7 +3861,7 @@ class Ui:
         self.act("REC %s" % r["label"], "POST", "/api/devices/%s/rec" % r["id"])
 
     def _iphone(self, cid):
-        return self.devs("iphone").get(cid) or {}
+        return self.devs("mobile").get(cid) or {}
 
     def iphone_check(self, cid):
         ip = self._iphone(cid)
@@ -3840,17 +3887,20 @@ class Ui:
             return
         pt = self.prompt("Port:", str(ip.get("port") or 4444))
         if pt and pt.strip().isdigit():
-            self.act("%s address" % n, "POST", "/api/devices/%s/config" % cid,
-                     {"host": h.strip(), "port": int(pt), "enabled": True})
+            s, d = self.call("%s address" % n, "POST", "/api/devices/%s/config" % cid,
+                             {"host": h.strip(), "port": int(pt), "enabled": True})
+            self.done("%s address" % n, s, d)
 
     def iphone_rename(self, cid):
         ip = self._iphone(cid)
         n = self.prompt("New name for %s:" % (ip.get("name") or cid), ip.get("name") or cid)
         if n and n.strip():
-            self.act("rename", "POST", "/api/devices/%s/config" % cid, {"name": n.strip()})
+            # Espera pela resposta (e pelo estado novo): o menu que volta a aparecer ja mostra o nome novo.
+            s, d = self.call("Rename", "POST", "/api/devices/%s/config" % cid, {"name": n.strip()})
+            self.done("Rename", s, d)
 
     def iphone_add(self):
-        n = self.prompt("Name for the new iPhone (e.g. iPhone B):")
+        n = self.prompt("Name for the new mobile (e.g. Mobile B):")
         if n is None:
             return
         h = self.prompt("IP of the phone (Blackmagic Camera > web server):")
@@ -3858,9 +3908,9 @@ class Ui:
             return
         pt = self.prompt("Port:", "4444")
         if pt and pt.strip().isdigit():
-            s, d = self.call("Add iPhone", "POST", "/api/devices",
-                             {"type": "iphone", "name": n.strip(), "host": h.strip(), "port": int(pt)})
-            self.done("Add iPhone", s, d, ["Added as %s." % d.get("id")]
+            s, d = self.call("Add mobile", "POST", "/api/devices",
+                             {"type": "mobile", "name": n.strip(), "host": h.strip(), "port": int(pt)})
+            self.done("Add mobile", s, d, ["Added as %s." % d.get("id")]
                       if s == 200 and d.get("ok") else None)
 
     # --- aparelhos: acrescentar e retirar (iPhone, Canon, BMPCC) ----------------
@@ -3878,8 +3928,8 @@ class Ui:
             tirados = d.get("removed") or []
             bm_ativa = (d.get("bmpcc") or {}).get("active", True)
             entradas = [
-                Sec("IPHONE"),
-                ("ip_add", "Add iPhone"),
+                Sec("MOBILE"),
+                ("ip_add", "Add mobile"),
                 Sec("CANON"),
                 ("cn_add", "Add Canon"),
                 ("cn_del", "Remove Canon" + ("" if canons else "  (none)")),
@@ -4348,18 +4398,21 @@ class Ui:
             return
         h = self.prompt("IP of %s on the camera Wi-Fi:" % (so.get("name") or cid), so.get("host") or "")
         if h and h.strip():
-            self.act("Sony address", "POST", "/api/devices/%s/config" % cid, {"host": h.strip()})
+            s, d = self.call("Sony address", "POST", "/api/devices/%s/config" % cid, {"host": h.strip()})
+            self.done("Sony address", s, d)
 
     def sony_cfg(self, cid, campo):
         so = self._sony(cid)
         if campo == "name":
             n = self.prompt("Name:", so.get("name") or "")
             if n and n.strip():
-                self.act("Rename", "POST", "/api/devices/%s/config" % cid, {"name": n.strip()})
+                s, d = self.call("Rename", "POST", "/api/devices/%s/config" % cid, {"name": n.strip()})
+                self.done("Rename", s, d)
         else:
             on = not so.get("enabled", True)
-            self.act("%s %s" % (so.get("name") or cid, "enabled" if on else "disabled"), "POST",
-                     "/api/devices/%s/config" % cid, {"enabled": on})
+            rot = "%s %s" % (so.get("name") or cid, "enabled" if on else "disabled")
+            s, d = self.call(rot, "POST", "/api/devices/%s/config" % cid, {"enabled": on})
+            self.done(rot, s, d)
 
     def sony_remove(self, cid):
         so = self._sony(cid)
@@ -4852,8 +4905,8 @@ class Ui:
     def iphone_remove(self, cid):
         ip = self._iphone(cid)
         if self.confirm("Remove %s from the bridge?\n\nIt stays in the saved list." % (ip.get("name") or cid)):
-            s, d = self.call("Remove iPhone", "POST", "/api/devices/%s/remove" % cid)
-            self.done("Remove iPhone", s, d)
+            s, d = self.call("Remove mobile", "POST", "/api/devices/%s/remove" % cid)
+            self.done("Remove mobile", s, d)
 
     def toggle_target(self, rid):
         """Arma/desarma um device. Vai so a mudanca (o bridge aplica-a a lista que tem): dois toques seguidos, aqui ou
@@ -4880,7 +4933,7 @@ class Ui:
             ("DJI Mic 3", COR["time"], self.wz_mic3),
             ("GoPro", COR["cams"], self.wz_gopro),
             ("Camera clocks", COR["time"], self.wz_camclock),
-            ("iPhone timecode", COR["time"], self.wz_iphones),
+            ("Mobile timecode", COR["time"], self.wz_iphones),
             ("BMPCC settings", COR["cams"], self.wz_bm_settings),
             ("Canon settings", COR["cams"], self.wz_canon_settings),
             ("REC targets", COR["rec"], self.wz_targets),
@@ -4984,10 +5037,10 @@ class Ui:
         ntp, tel = (src.get("ntp") or {}).get("ok"), (src.get("iphone") or {}).get("ok")
         L = [("The system clock has to be right before anything is set from it.", "bold"), "",
              "System clock: %s" % time.strftime("%A %Y-%m-%d %H:%M:%S"),
-             ("Source: NTP" if ntp else "Source: iPhone" if tel else "Source: none confirmed",
+             ("Source: NTP" if ntp else "Source: mobile" if tel else "Source: none confirmed",
               CLOCK_COR["ntp"] if ntp else "green" if tel else "red")]
         if not (ntp or tel):
-            L += ["", "With an uplink: Get NTP. Without one: GET PHONE TIME on the phone page."]
+            L += ["", "With an uplink: Get NTP. Without one: GET MOBILE TIME on the mobile page."]
 
         def accao(state):
             s, d = self.call("Get NTP", "POST", "/api/time/ntp/sync", timeout=45)
@@ -5388,10 +5441,10 @@ class Ui:
         return L, tudo, ("reset the gateway" if not gw_ok else "check the GoPro clocks"), accao
 
     def wz_iphones(self, state):
-        ips = sorted(self.devs("iphone").items())
+        ips = sorted(self.devs("mobile").items())
         if not ips:
-            return [("No iPhone in this bridge: nothing to check here.", "dim")], True, None, None
-        L = [("How far each iPhone timecode is from the LTC (after the Sidus sync).", "bold"), ""]
+            return [("No mobile in this bridge: nothing to check here.", "dim")], True, None, None
+        L = [("How far each mobile timecode is from the LTC (after the Sidus sync).", "bold"), ""]
         medidos = True
         for cid, ip in ips:
             if not ip.get("connected"):
@@ -5532,7 +5585,7 @@ class Ui:
                 L.append(("SSH fingerprint %s" % so["fingerprint"], "dim"))
             return L
         if tipo_de(row["id"]) == "iphone":
-            ip = devs_tipo(dv, "iphone").get(row["id"]) or {}
+            ip = devs_tipo(dv, "mobile").get(row["id"]) or {}
             L.append(("%s (Blackmagic Camera app)  %s" % (ip.get("name") or row["id"],
                                                         "connected" if row["conn"] else "NOT REACHABLE"),
                       "green" if row["conn"] else "red"))
@@ -5600,12 +5653,12 @@ class Ui:
 
     def opcoes_menu(self, titulo, itens_fn, cor):
         """As opcoes de uma linha do dashboard (F6, gateway), uma por linha: as mesmas da barra 1-9, com o nome
-        inteiro. Volta ao menu depois de cada uma (os textos mudam: Switch ON/OFF, modo...)."""
+        inteiro. Volta ao menu depois de cada uma (os textos mudam: Switch ON/OFF, modo...). `titulo` pode ser uma funcao."""
         while True:
             itens = itens_fn()
             if not itens:
                 return
-            i = self.menu(titulo, [(t, c) for t, _, c in itens], cor=cor)
+            i = self.menu(titulo() if callable(titulo) else titulo, [(t, c) for t, _, c in itens], cor=cor)
             if i is None:
                 return
             itens[i][1]()
@@ -5613,10 +5666,10 @@ class Ui:
     def camera_menu(self, row):
         if not row:
             return
-        rid = row["id"]
+        primeira, rid = row, row["id"]
 
         def fresh():
-            return next((r for r in self.rows if r["id"] == rid), row)
+            return self.linha_fresca(primeira)
 
         while True:
             row = fresh()
@@ -5641,15 +5694,20 @@ class Ui:
                             else "bmpcc_extra" if eh_bm_extra(rid) else "sony" if tipo_de(rid) == "sony"
                             else rid if rid in ("bmpcc", "f6") else "canon")
 
-    def device_items(self, row, fresh=None):
+    def linha_fresca(self, row):
+        """A linha do device com o ultimo estado do bridge. Nao usa self.rows, que so se refaz ao desenhar o dashboard:
+        um menu aberto mostrava o nome e o alias antigos ate se sair dele (issue #35)."""
+        return next((r for r in build_rows(self.st(), self.dv()) if r["id"] == row["id"]), row)
+
+    def device_items(self, row, fresh=None, so_raros=False):
         """As opcoes de um device (texto, accao, cor): as do menu Camera e da barra de opcoes do dashboard.
 
         So as que se aplicam ao estado: sem ligacao nao ha REC, TC, cena nem definicoes. A accao principal (REC) vai
-        primeiro e as raras (retirar, mudar endereco ou nome, a ligacao...) ficam no submenu More."""
+        primeiro e as raras (retirar, mudar endereco ou nome, a ligacao...) ficam no submenu More (`so_raros`: so essas)."""
         rid = row["id"]
         if fresh is None:
             def fresh():
-                return next((r for r in self.rows if r["id"] == rid), row)
+                return self.linha_fresca(row)
         r = fresh()
         ligado = bool(r.get("conn"))
         cc = COR["cams"]
@@ -5697,14 +5755,20 @@ class Ui:
                 items += [("Settings", lambda: self.canon_setting(fresh()), cc),
                           ("Set clock", lambda: self.canon_clock(fresh()), COR["time"])]
             raros += [("Poll settings  %s" % ("ON" if poll else "OFF"), self.toggle_polling, cc)]
+        if so_raros:
+            return raros
         items += [("Alias  %s" % (r.get("alias") or "-"), lambda: self.alias_edit(fresh()), cc)]
         if raros:
-            items += [("More", lambda: self.mais(r["label"], raros), cc)]
+            # O titulo e os itens refazem-se a cada volta do submenu: o nome muda la dentro (Rename).
+            items += [("More", lambda: self.mais(lambda: fresh()["label"],
+                                                 lambda: self.device_items(row, fresh, so_raros=True)), cc)]
         return items
 
     def mais(self, titulo, itens):
-        """O submenu More: as opcoes raras de um device ou gateway (retirar, mudar o endereco ou o nome...)."""
-        self.opcoes_menu("More  %s" % titulo, lambda: itens, COR["cams"])
+        """O submenu More: as opcoes raras de um device ou gateway (retirar, mudar o endereco ou o nome...).
+        `titulo` e `itens` podem ser funcoes: refazem-se depois de cada opcao, com o estado novo."""
+        self.opcoes_menu(lambda: "More  %s" % (titulo() if callable(titulo) else titulo),
+                         itens if callable(itens) else (lambda: itens), COR["cams"])
 
     def f6_items(self):
         """As opcoes do Zoom F6 na barra do dashboard."""
@@ -5815,7 +5879,7 @@ class Ui:
             i = self.menu("Config  %s" % (ip.get("name") or cid), [
                 ("IP  %s:%s" % (ip.get("host"), ip.get("port")), COR["cams"]),
                 ("Rename  %s" % ip.get("name"), COR["cams"]),
-                ("Add iPhone", COR["cams"]),
+                ("Add mobile", COR["cams"]),
                 ("Remove", COR["rec"]),
             ], cor=COR["cams"])
             if i is None:
@@ -6780,7 +6844,7 @@ class Ui:
             if self.a_gravar():
                 self.say("Recording: restore after the take", 2)
                 continue
-            if not self.confirm("Restore %s?\n\nThe cameras, iPhones, gateways, profiles and settings in it replace the "
+            if not self.confirm("Restore %s?\n\nThe cameras, mobiles, gateways, profiles and settings in it replace the "
                                 "current ones, and the bridge restarts." % fs[j]["name"]):
                 continue
             s, r = self.call("Restore", "POST", "/api/backup/restore", {"usb_file": fs[j]["name"]}, timeout=60)

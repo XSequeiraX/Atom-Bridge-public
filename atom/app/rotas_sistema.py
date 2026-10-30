@@ -174,7 +174,7 @@ def ap_aparelhos(macs):
     try:
         for c in list(nucleo.iphs.status().values()) + list(nucleo.sonys.status().values()):
             if c.get("host"):
-                por_ip[c["host"]] = c.get("name") or "iPhone"
+                por_ip[c["host"]] = c.get("name") or "Mobile"
     except Exception:
         pass
     out = []
@@ -594,7 +594,7 @@ def api_preflight():
     for _ip in nucleo.iphs.status().values():
         if not _ip.get("enabled", True):
             continue
-        _nm = _ip.get("name") or "iPhone"
+        _nm = _ip.get("name") or "Mobile"
         _lig = bool(_ip.get("connected"))
         _bat = _ip.get("battery")
         add(_lig, f"{_nm} connected",
@@ -659,7 +659,7 @@ def api_preflight():
     add(eff in ("bmtc", "ltc", "ntp", "phone"), "Time source",
         {"bmtc": "live timecode from the BMPCC", "ltc": "stored LTC reading",
          "tc-stepped": "LTC INVALID — clock stepped after it",
-         "ntp": "NTP", "phone": "iPhone",
+         "ntp": "NTP", "phone": "Mobile",
          "tc-none": "NO TIMECODE", "tc-freerun": "TIMECODE FREE-RUNNING",
          "unset": "NO SOURCE PICKED YET",
          "none": "NONE"}.get(eff, eff))

@@ -31,7 +31,7 @@ CONSOLA = [
     ("falhas", "100x40", "falhas", [], ["offline", "FAULT"]),
     ("a gravar", "100x40", "rec", [], ["REC  00:03:1", "take 7", "cameras"]),
     ("rodape", "100x40", "normal", [], ["SPACE target", "ESC menu", "F1 help"]),
-    ("menu DEVICES", "100x40", "normal", ["\\e", "2"], ["DEVICES", "Add iPhone"]),
+    ("menu DEVICES", "100x40", "normal", ["\\e", "2"], ["DEVICES", "MOBILE", "Add mobile"], ["Add iPhone", "IPHONE"]),
     ("menu DEVICES Sony", "100x50", "normal", ["\\e", "2"], ["SONY", "Add a Sony", "Sony SDK and search"]),
     ("linha Sony", "100x40", "normal", [], ["A7 IV"]),
     # O nome do device aparece inteiro no dashboard (ate 12 caracteres), sem "iPh"/"GP"/"BM".
@@ -39,6 +39,13 @@ CONSOLA = [
     # As Canon so gravam em modo video: uma em modo foto aparece como "not video" (nao como "ready") e nao ha nada de fotos.
     ("Canon em modo foto", "100x40", "normal", [], ["not video"], ["PHOTO", "shots"]),
     ("ajuda", "100x40", "normal", ["?"], ["HELP", "Keys"]),
+    # Issue #35: o nome ou o alias novo aparece logo no menu aberto (antes so depois de sair e voltar a entrar)
+    ("alias novo no menu", "100x40", "normal", ["\\d", "\\d", "\\d", "\\r", "6", "\x7f" * 8 + "B-cam", "\\r", "!wait:2"],
+     ["Alias  B-cam"], ["Alias  A-cam"]),
+    ("nome novo no Config", "100x40", "normal", ["\\d", "\\d", "\\d", "\\r", "5", "2", "\x7f" * 20 + "iPhone Two", "\\r", "!wait:2"],
+     ["Config  iPhone Two", "Rename  iPhone Two"], ["iPhone Cabine"]),
+    ("nome novo no More", "100x40", "normal", ["\\d"] * 6 + ["\\r", "5", "2", "\x7f" * 20 + "FX3 B", "\\r", "!wait:2"],
+     ["More  FX3 B"], ["More  A7 IV"]),
     ("dados da take", "100x40", "fim", ["!wait:4"], ["TAKE 7 DONE"]),
     # Os avisos de licenca: sem aceitar nao se entra; a consola so carrega depois do "y".
     ("avisos de licenca", "100x30", "termos", [], ["LICENSES AND NOTICES"], ["GATEWAYS"]),
@@ -197,6 +204,50 @@ def iphone_obturador():
     return erros
 
 
+def erros_curtos():
+    """Os erros de rede chegam curtos a consola, a pagina e ao registo (issue #34), com as mensagens reais das bibliotecas;
+    a copia do bridge-ctl.py da o mesmo que o atom/app/curto.py."""
+    import importlib.util
+    app = os.path.join(RAIZ, "atom", "app")
+    sys.path.insert(0, app)
+    import curto as c
+    spec = importlib.util.spec_from_file_location("bridge_ctl_curto", os.path.join(RAIZ, "bridge-ctl.py"))
+    ctl = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ctl)
+    casos = [
+        ("HTTPConnectionPool(host='10.255.255.1', port=8080): Max retries exceeded with url: /x (Caused by "
+         "ConnectTimeoutError(<urllib3.connection.HTTPConnection object at 0x7f3a2c1d0>, 'Connection to 10.255.255.1 "
+         "timed out. (connect timeout=1)'))", "no answer (timeout)"),
+        ("Connect failed: HTTPConnectionPool(host='127.0.0.1', port=8771): Read timed out. (read timeout=1)",
+         "Connect failed: no answer (timeout)"),
+        ("<urlopen error timed out>", "no answer (timeout)"),
+        ("<urlopen error [Errno 111] Connection refused>", "connection refused"),
+        ("ConnectTimeout: HTTPConnectionPool(host='192.168.4.50', port=4444): Max retries exceeded with url: "
+         "/control/api/v1/transports/0/record", "no answer (timeout)"),
+        ("HTTPConnectionPool(host='127.0.0.1', port=1): Max retries exceeded with url: /x (Caused by NewConnectionError("
+         "'<urllib3.connection.HTTPConnection object at 0x7f>: Failed to establish a new connection: [Errno 111] "
+         "Connection refused'))", "connection refused"),
+        ("OSError: [Errno 113] No route to host", "unreachable"),
+        ("<urlopen error [Errno -2] Name or service not known>", "name not found"),
+        ("Record stop failed: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without "
+         "response'))", "Record stop failed: connection dropped"),
+        ("Set ISO failed: 404 Client Error: Not Found for url: http://192.168.4.20:8080/ccapi/ver100/shooting/settings/iso",
+         "Set ISO failed: HTTP 404 Not Found"),
+        ("Connect failed: HTTPError: HTTP Error 403: Forbidden", "Connect failed: HTTP 403 Forbidden"),
+        # O que nao e erro de rede fica como esta
+        ("REC: canon1 skipped \u2014 not in video mode", "REC: canon1 skipped \u2014 not in video mode"),
+        ("Shoot log write failed: [Errno 28] No space left on device", "Shoot log write failed: [Errno 28] No space left on device"),
+        ("REC ALL: iPhone did not confirm (timeout)", "REC ALL: iPhone did not confirm (timeout)"),
+    ]
+    erros = []
+    for txt, quer in casos:
+        for nome, f in (("curto.py", c.curto), ("bridge-ctl.py", ctl.curto)):
+            v = f(txt)
+            if v != quer:
+                erros.append("%s: %r -> %r, devia ser %r" % (nome, txt[:60], v, quer))
+    return erros
+
+
 def instalador():
     """instalar_app (atom-install/lib_app.sh) copia a app por cima de uma instalacao com um programa A CORRER (o sony_ctl,
     que o bridge mantem em execucao): nao pode falhar com "Text file busy", e o processo antigo segue com a sua versao."""
@@ -264,6 +315,7 @@ if __name__ == "__main__":
     for nome, f in (("Python (compila, pyflakes)", python), ("API (api_check)", api),
                     ("JavaScript das paginas", javascript), ("Consola no simulador", consola),
                     ("Sony com o simulador do ajudante", sony), ("Instalador: copia com um programa a correr", instalador),
-                    ("iPhone: obturador com 1 casa decimal", iphone_obturador)):
+                    ("iPhone: obturador com 1 casa decimal", iphone_obturador),
+                    ("Erros de rede curtos (#34)", erros_curtos)):
         ok = grupo(nome, f()) and ok
     sys.exit(0 if ok else 1)

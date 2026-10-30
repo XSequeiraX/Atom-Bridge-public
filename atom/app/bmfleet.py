@@ -19,6 +19,7 @@ import urllib.request
 import gravar
 import tc_vigia
 import fw_ota
+from curto import erro
 
 POLL = 0.25               # s entre pedidos a cada C3
 QUEDA = 4.0               # s sem resposta para dar o C3 por perdido
@@ -287,7 +288,7 @@ class BmCam:
                 try:
                     self._poll_uma_vez()
                 except Exception as e:      # nunca deixa o fio morrer
-                    self.error = str(e)
+                    self.error = erro(e)
             self._stop.wait(POLL)
 
     def start(self):

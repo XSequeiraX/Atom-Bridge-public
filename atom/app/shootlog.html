@@ -178,7 +178,7 @@
                 });
                 return await r.json();
             } catch (e) {
-                return {error: String(e)};
+                return {error: /Failed to fetch|NetworkError|Load failed/i.test(String(e)) ? 'no connection to the bridge' : String(e).replace(/\b[A-Za-z]*Error: /g, '')};
             }
         }
 

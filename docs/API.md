@@ -27,14 +27,14 @@ Gerado por `atom/app/api_check.py --docs` a partir das rotas do bridge (`nucleo.
 
 | Metodo | Caminho | O que faz |
 |---|---|---|
-| GET | `/api/devices` | Todos os aparelhos do rig: devices (em servico, um item cada com id e type), removed (retirados, para restaurar ou esquecer), order, alias e o bloco bmpcc. ?type= filtra por tipo (canon, iphone, gopro, bmpcc, bmpcc_extra, sony, f6). |
-| POST | `/api/devices` | Acrescenta um aparelho: {"type": "canon", name, ip, port, https} / {"type": "iphone", name, host, port} / {"type": "gopro", mac, model, name, gw} / {"type": "bmpcc", address, alias} / {"type": "bmpcc_extra", name, host} / {"type": "sony", name, model, via: "ip" / "usb", host / serial, ssh, user, password} (409 se os avisos de licenca ainda nao foram aceites: GET/POST /api/system/terms). Devolve o id novo (o da BMPCC e sempre "bmpcc"). |
+| GET | `/api/devices` | Todos os aparelhos do rig: devices (em servico, um item cada com id e type), removed (retirados, para restaurar ou esquecer), order, alias e o bloco bmpcc. ?type= filtra por tipo (canon, mobile (ou iphone), gopro, bmpcc, bmpcc_extra, sony, f6). |
+| POST | `/api/devices` | Acrescenta um aparelho: {"type": "canon", name, ip, port, https} / {"type": "mobile", name, host, port} / {"type": "gopro", mac, model, name, gw} / {"type": "bmpcc", address, alias} / {"type": "bmpcc_extra", name, host} / {"type": "sony", name, model, via: "ip" / "usb", host / serial, ssh, user, password} (409 se os avisos de licenca ainda nao foram aceites: GET/POST /api/system/terms). Devolve o id novo (o da BMPCC e sempre "bmpcc"). |
 | GET | `/api/devices/<id>` | Um aparelho (em servico ou retirado) pelo seu id: {"device": {...}}; 404 se o id nao existe. |
 | POST | `/api/devices/batch` | Uma accao sobre varios aparelhos: {"action": ..., "type": ...}. order {ids: [...]} (ordem no ecra principal); reset {type: canon} (tira as Canon ligadas de um estado preso); settings_polling {type: canon, on: bool} (liga/desliga a leitura de Av/Tv/ISO...); lead {type: gopro, ms: N} (avanco do QR da hora). |
 
 ### `devices/<id>/<accao>`
 
-Tudo o que e de um aparelho. O id e o do `GET /api/devices`; 404 se nao existe, 409 se o tipo nao tem a accao ou o aparelho esta retirado (so restore e forget valem). Tipos: canon, iphone, gopro, bmpcc, bmpcc_extra, sony, f6.
+Tudo o que e de um aparelho. O id e o do `GET /api/devices`; 404 se nao existe, 409 se o tipo nao tem a accao ou o aparelho esta retirado (so restore e forget valem). Tipos: canon, mobile, gopro, bmpcc, bmpcc_extra, sony, f6.
 
 | Metodo | Accao | Tipos | O que faz |
 |---|---|---|---|
@@ -42,7 +42,7 @@ Tudo o que e de um aparelho. O id e o do `GET /api/devices`; 404 se nao existe, 
 | POST | `afauto` | canon | Volta ao AF automatico (o metodo de antes do primeiro clique). |
 | GET | `afframe` | canon | Moldura(s) de AF seleccionada(s) e recorte do live view (escala da imagem fixa). |
 | POST | `afpoint` | canon | Move a moldura de AF para um ponto do live view (u, v em 0..1). |
-| POST | `alias` | canon, iphone, gopro, bmpcc, bmpcc_extra, sony, f6 | Alias da camara, um nome curto de referencia (vai para a coluna alias do shoot log): {"alias": texto}. Vazio apaga. |
+| POST | `alias` | canon, mobile, gopro, bmpcc, bmpcc_extra, sony, f6 | Alias da camara, um nome curto de referencia (vai para a coluna alias do shoot log): {"alias": texto}. Vazio apaga. |
 | GET | `card/ls` | f6 | Lista uma pasta do cartao: ?path=. |
 | POST | `card/op` | f6 | mkdir / rename / rename_take / move / trash / empty_trash no cartao. |
 | POST | `card/play` | f6 | Toca um WAV do cartao pela saida de som do Atom (o LTC larga-a entretanto). |
@@ -51,22 +51,22 @@ Tudo o que e de um aparelho. O id e o do `GET /api/devices`; 404 se nao existe, 
 | GET | `card/status` | f6 | Estado do cartao SD do F6 (montado, leitura em curso, leitor de som). |
 | POST | `card/stop` | f6 | Para o som do cartao. |
 | POST | `clock` | gopro | Hora da camara (por BLE, 1 s) contra a do bridge: serve para ver se o QR a acertou. |
-| POST | `config` | iphone, bmpcc_extra, sony | Nome / endereco / porta / ligado: iPhone {name, host, port, enabled}; BMPCC extra {name, host}; Sony {name, model, via, host, serial, ssh, user, password, enabled}. |
+| POST | `config` | mobile, bmpcc_extra, sony | Nome / endereco / porta / ligado: mobile {name, host, port, enabled}; BMPCC extra {name, host}; Sony {name, model, via, host, serial, ssh, user, password, enabled}. |
 | POST | `connect` | canon, bmpcc | Liga a camara: a Canon pelo CCAPI; a BMPCC pelo Bluetooth (so uma tentativa de cada vez). |
 | POST | `disconnect` | canon, bmpcc | Desliga a camara (recusado a gravar). |
-| POST | `forget` | canon, iphone, bmpcc, sony | Apaga de vez um aparelho retirado da lista dos guardados. |
+| POST | `forget` | canon, mobile, bmpcc, sony | Apaga de vez um aparelho retirado da lista dos guardados. |
 | POST | `iso` | bmpcc | ISO da BMPCC principal: {"iso": 800}. |
 | POST | `jam` | f6 | 5 s de LTC a andar pela saida de auscultadores, para o F6 acertar o TC. |
 | GET | `liveview.mjpg` | canon | O live view da Canon em MJPEG (multipart/x-mixed-replace). |
 | POST | `note` | f6 | Nota da PROXIMA take no F6 (metadado NOTE), pelo teclado do FRC-8. |
 | POST | `path` | bmpcc | Por onde vai a BMPCC principal: {"via": "c3"} (o gateway C3, o normal) ou {"via": "bluez"} (o Bluetooth do proprio Atom, plano B, com a camara emparelhada ao Atom: Bluetooth > Pair a new device). Recusado a gravar. |
-| POST | `rec` | canon, iphone, gopro, bmpcc, bmpcc_extra, sony, f6 | REC/STOP so deste device, sem mexer nos alvos nem nos outros: o botao REC de cada linha, da consola e do USB. Passa pelo mesmo REC de grupo (fila, intencao e confirmacao) com um so alvo. |
-| POST | `remove` | canon, iphone, gopro, bmpcc, bmpcc_extra, sony | Tira o aparelho de servico (recusado a gravar). Canon, iPhone, BMPCC e Sony ficam na lista dos retirados (restore); a GoPro e a BMPCC extra apagam-se. |
-| POST | `restore` | canon, iphone, bmpcc, sony | Volta a pôr em servico um aparelho retirado (a BMPCC que estava em servico fica guardada). |
-| POST | `scene` | iphone, f6 | Cena da claquete: iPhone {scene} (proximos clips); F6 {name} ou {inc: true} (cena +1). |
+| POST | `rec` | canon, mobile, gopro, bmpcc, bmpcc_extra, sony, f6 | REC/STOP so deste device, sem mexer nos alvos nem nos outros: o botao REC de cada linha, da consola e do USB. Passa pelo mesmo REC de grupo (fila, intencao e confirmacao) com um so alvo. |
+| POST | `remove` | canon, mobile, gopro, bmpcc, bmpcc_extra, sony | Tira o aparelho de servico (recusado a gravar). Canon, mobile, BMPCC e Sony ficam na lista dos retirados (restore); a GoPro e a BMPCC extra apagam-se. |
+| POST | `restore` | canon, mobile, bmpcc, sony | Volta a pôr em servico um aparelho retirado (a BMPCC que estava em servico fica guardada). |
+| POST | `scene` | mobile, f6 | Cena da claquete: mobile {scene} (proximos clips); F6 {name} ou {inc: true} (cena +1). |
 | POST | `setting/<name>` | canon | Muda um ajuste simples da Canon (Av, Tv, ISO, modo de obturador, qualidade de video...): {"value": ...}. |
 | POST | `sync_time` | canon | Acerta o relogio da Canon pelo do bridge (accao do operador, recusada a gravar). |
-| POST | `tc` | iphone, sony | iPhone: mede ja o desvio do timecode para o LTC (10 amostras). Sony: escreve o Time Code Preset (camara parada): {"tc": "HH:MM:SS:FF"}, ou sem tc o LTC de agora. |
+| POST | `tc` | mobile, sony | Mobile: mede ja o desvio do timecode para o LTC (10 amostras). Sony: escreve o Time Code Preset (camara parada): {"tc": "HH:MM:SS:FF"}, ou sem tc o LTC de agora. |
 | POST | `track_name` | f6 | Nome de uma pista no F6 (metadado TRACK NAME da proxima take). |
 | POST | `user` | f6 | Tecla USER do F6 pela funcao: mark, clear_clip, circled (f6_ctl.USER_KEYS). |
 

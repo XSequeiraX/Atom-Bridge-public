@@ -1433,7 +1433,7 @@
             <p><b>Three rows, three jobs.</b> The top row <b>picks</b> which clock
                runs the show and is the only row that carries state. The middle row
                <b>fetches</b> from a source. The bottom row <b>forgets</b> one. A
-               column is a source, top to bottom: LTC (the stored jam), NTP, IPHONE,
+               column is a source, top to bottom: LTC (the stored jam), NTP, MOBILE,
                and BM. BM has no fetch and no clear — it is live or it is not.
                <b>Nothing is picked at boot</b> — every start comes up with no clock
                source at all, on purpose, so a stale choice from a previous session
@@ -1450,7 +1450,7 @@
                in silence. And connecting the BMPCC no longer steals the reference: it
                simply becomes available, and you choose it if you want it. Two
                timecodes can silently disagree, so which one governs is your call.</p>
-            <p><b>NTP and IPHONE are the same physical clock.</b> The system has one
+            <p><b>NTP and MOBILE are the same physical clock.</b> The system has one
                clock; those two differ only in where its time last came from. That is
                why picking NTP without ever having pressed GET NTP counts as a source
                you do not have, instead of quietly meaning "use whatever time is in
@@ -1480,7 +1480,7 @@
                two, as <b>+Ns vs LTC</b>. This exists because they can silently
                disagree: connecting the camera used to swap the reference without
                showing you that the two were seconds apart.</p>
-            <p><b>CLEAR LTC / CLEAR NTP / CLEAR IPHONE TIME</b> Forget a source, so
+            <p><b>CLEAR LTC / CLEAR NTP / CLEAR MOBILE TIME</b> Forget a source, so
                it goes back to white. <b>None of them changes the system clock</b> — it
                has only one and it keeps whatever time it has; what you are clearing is
                the claim about where that time came from. Useful when you have driven
@@ -1642,12 +1642,12 @@
                    2) FETCH     -- ir buscar. Sem estado nenhum: o que se tem
                       ou nao se tem ja esta dito na linha de cima.
                    3) CLEAR     -- esquecer. Tambem sem estado.
-                 A coluna e' a fonte: LTC/NTP/IPHONE/BM de cima a baixo.
+                 A coluna e' a fonte: LTC/NTP/MOBILE/BM de cima a baixo.
                  O BM nao tem fetch nem clear -- esta ao vivo ou nao esta. -->
             <div class="devices-row" id="clockSrcRow" style="grid-template-columns: repeat(4, 1fr);">
                 <button class="dev-btn" id="clockBtn_ltc" onclick="setClockSource('ltc')" title="Use the stored LTC jam from the TC-1 as the clock.">LTC</button>
                 <button class="dev-btn" id="clockBtn_ntp" onclick="setClockSource('ntp')" title="Use the system clock, with the time that came from an NTP server.">NTP</button>
-                <button class="dev-btn" id="clockBtn_iphone" onclick="setClockSource('iphone')" title="Use the system clock, with the time that came from this iPhone.">IPHONE</button>
+                <button class="dev-btn" id="clockBtn_iphone" onclick="setClockSource('iphone')" title="Use the system clock, with the time that came from this mobile.">MOBILE</button>
                 <button class="dev-btn" id="clockBtn_bm" onclick="setClockSource('bm')" title="Use the BMPCC's live timecode as the clock. Needs the camera connected and giving timecode.">BM</button>
             </div>
             <div class="devices-row" id="fetchRow" style="grid-template-columns: repeat(4, 1fr); margin-top:8px;">
@@ -1656,13 +1656,13 @@
                     <button class="dev-btn" id="ltcBleBtn" onclick="ltcJam(false, 'ble')" title="Read the TC-1s over Bluetooth, no cable. Open the Sidus app first, with the timecodes running. Takes about 15 s.">BT</button>
                 </div>
                 <button class="dev-btn" id="ntpGetBtn" onclick="forceNtp()" title="Fetch the time from an NTP server. Needs an uplink; with no network it refuses rather than wrecking the clock state.">GET NTP</button>
-                <button class="dev-btn" id="phoneTimeBtn" onclick="adoptPhoneTime()" title="Fetch the time from this iPhone and set the system clock from it.">GET PHONE TIME</button>
+                <button class="dev-btn" id="phoneTimeBtn" onclick="adoptPhoneTime()" title="Fetch the time from this mobile and set the system clock from it.">GET MOBILE TIME</button>
                 <span></span>
             </div>
             <div class="devices-row" id="clearRow" style="grid-template-columns: repeat(4, 1fr); margin-top:8px;">
                 <button class="dev-btn" id="ltcClearBtn" onclick="ltcClear()" title="Forget the stored LTC reading.">CLEAR LTC</button>
                 <button class="dev-btn" id="ntpClearBtn" onclick="clearNtp()" title="Stop claiming NTP as a source. Does not change the system clock — there is only one, this just forgets where its time came from.">CLEAR NTP</button>
-                <button class="dev-btn" id="phoneClearBtn" onclick="clearPhoneTime()" title="Stop claiming the iPhone as a source. Does not change the system clock either.">CLEAR IPHONE TIME</button>
+                <button class="dev-btn" id="phoneClearBtn" onclick="clearPhoneTime()" title="Stop claiming the mobile as a source. Does not change the system clock either.">CLEAR MOBILE TIME</button>
                 <span></span>
             </div>
             <button class="sys-btn test" id="piClockLtcBtn" onclick="setPiClockFromLtc()" title="Set the system clock from the generator's date and time. Useful on location with no internet, when the system clock cannot be trusted.">SET SYSTEM CLOCK FROM LTC</button>
@@ -1820,9 +1820,9 @@
 
     <!-- iPhones com a app Blackmagic Camera: um painel por iPhone. -->
     <div class="section-divider" id="iphDivider">
-        IPHONES
+        MOBILES
         <span class="divider-btns"><button class="layout-toggle-btn" onclick="iphAdd()"
-            title="Add an iPhone running Blackmagic Camera (web server on, port 4444)">+ ADD</button></span>
+            title="Add a mobile (iPhone or Android) running Blackmagic Camera (web server on, port 4444)">+ ADD</button></span>
     </div>
     <div id="iphPanels"></div>
 
@@ -1938,6 +1938,16 @@
     // Quando a pagina mandou a ultima ordem. Um /api/status pedido antes dela e que chega depois (o Atom ocupado) e
     // um retrato de antes da ordem: punha o botao como estava ate ao poll seguinte. Ver poll().
     let _acaoEm = 0;
+
+    // Erro de um fetch (ou um texto de erro) em poucas palavras: o texto cru do browser ("TypeError: Failed to fetch",
+    // "AbortError: ...") nao diz nada a quem filma. O mesmo que o atom/app/curto.py faz no bridge.
+    function curto(e) {
+        const s = String(e && e.message !== undefined && e.name ? e.name + ': ' + e.message : e);
+        if (/AbortError|TimeoutError|timed? ?out/i.test(s)) return 'no answer (timeout)';
+        if (/Failed to fetch|NetworkError|Load failed|Network request failed/i.test(s)) return 'no connection to the bridge';
+        if (/SyntaxError|JSON/i.test(s)) return 'bad answer from the bridge';
+        return s.replace(/\b[A-Za-z]*Error: /g, '');
+    }
     function api(endpoint, method='POST', body=null) {
         const opts = {method};
         if (method !== 'GET') _acaoEm = Date.now();
@@ -2486,7 +2496,7 @@
         bmtc: 'Live timecode from the BMPCC',
         ltc:  'Stored LTC reading available',
         ntp:  'NTP synced',
-        phone: 'Time came from the iPhone',
+        phone: 'Time came from the mobile',
     };
     const BAD_SRC = {
         'tc-none':    'No timecode: BMPCC not live and no LTC stored',
@@ -2513,7 +2523,7 @@
         });
     }
     function clearPhoneTime() {
-        if (!confirm('Stop claiming the iPhone as a clock source?\n\n'
+        if (!confirm('Stop claiming the mobile as a clock source?\n\n'
                      + "The system clock itself does not change.")) return;
         api('time/phone/clear', 'POST').then(r => {
             if (r && r.error) alert(r.error);
@@ -2641,7 +2651,7 @@
         // hesitar num botao que naquele momento e inofensivo.
         const d = _state || {};
         const fontes = d.clock_sources || {};
-        const NOME = {ltc: 'LTC', ntp: 'NTP', iphone: 'iPhone', bm: 'BM'};
+        const NOME = {ltc: 'LTC', ntp: 'NTP', iphone: 'Mobile', bm: 'BM'};
         let msg = 'Forget the stored LTC?\n\n';
         if (d.clock_source_pref === 'ltc') {
             // Sem fallback automatico: apagar a fonte em uso deixa mesmo de
@@ -3124,7 +3134,7 @@
     // adivinha pelo prefixo do id. O que ninguem registou e uma Canon.
     const TIPO_ALVO = {bmpcc: 'bmpcc', f6: 'f6'};
     const tipoDe = t => TIPO_ALVO[t] || 'canon';
-    const tipoEstado = {iphone: 'iphones', gopro: 'gopros', bmpcc_extra: 'bmpcc_extras', sony: 'sonys'};
+    const tipoEstado = {mobile: 'iphones', gopro: 'gopros', bmpcc_extra: 'bmpcc_extras', sony: 'sonys'};
     const REC_LABEL = {bmpcc: 'BM', r6m2: 'R6', r10: 'R10', f6: 'F6'};
     let _recTargets = ['bmpcc'];
     // Uma camara desligada nao fica marcada a verde so por a preferencia
@@ -3233,7 +3243,7 @@
         // The panel adds what the badge cannot show: the free MB next to the RAM%, swap and the CPU load.
         //
         // A LINHA DE SELECCAO e a unica com estado. A coluna e a fonte, e a
-        // ordem e a mesma da marcacao: TIMECODE, NTP, IPHONE, BM.
+        // ordem e a mesma da marcacao: TIMECODE, NTP, MOBILE, BM.
         const fontes = d.clock_sources || {};
         [['ltc', 'clockBtn_ltc'], ['ntp', 'clockBtn_ntp'],
          ['iphone', 'clockBtn_iphone'], ['bm', 'clockBtn_bm']].forEach(par => {
@@ -3247,7 +3257,7 @@
         const pb = document.getElementById('phoneTimeBtn');
         if (pb) {
             const dl = d.phone_delta;
-            pb.textContent = 'GET PHONE TIME' +
+            pb.textContent = 'GET MOBILE TIME' +
                 (d.phone_fresh && dl != null && Math.abs(dl) > 2
                  ? '  (' + (dl > 0 ? '+' : '') + dl + 's)' : '');
         }
@@ -3256,7 +3266,7 @@
         if (ci) {
             const map = {bmtc: 'live timecode from the BMPCC',
                          ltc: 'stored LTC reading',
-                         ntp: 'NTP', phone: 'iPhone (no NTP)',
+                         ntp: 'NTP', phone: 'Mobile (no NTP)',
                          'tc-freerun': 'TIMECODE FREE-RUNNING — NOTHING IS SET',
                          'tc-none': 'NO TIMECODE — NOTHING IS SET',
                          'tc-stepped': 'LTC INVALID — read it again',
@@ -3450,7 +3460,7 @@
     setInterval(poll, 1000);
     poll();
 
-    // === IPHONES ===
+    // === MOBILES ===
     // Cada iPhone e um alvo de REC (iphone1, iphone2...). Os botoes dos alvos e
     // os paineis criam-se a medida que a lista do bridge os traz.
     let _iphs = {}, _iphMsg = {};
@@ -3460,7 +3470,7 @@
         const all = document.getElementById('targetBtn_all');
         Object.keys(lista).sort().forEach(id => {
             REC_LABEL[id] = lista[id].name || id;
-            TIPO_ALVO[id] = lista[id].type || 'iphone';
+            TIPO_ALVO[id] = lista[id].type || 'mobile';
             if (!REC_TARGETS.includes(id)) REC_TARGETS.push(id);
             let b = document.getElementById('targetBtn_' + id);
             if (!b && row && all) {
@@ -3474,7 +3484,7 @@
         // os retirados saem
         for (let i = REC_TARGETS.length - 1; i >= 0; i--) {
             const t = REC_TARGETS[i];
-            if (tipoDe(t) === 'iphone' && !lista[t]) {
+            if (tipoDe(t) === 'mobile' && !lista[t]) {
                 delete TIPO_ALVO[t];
                 REC_TARGETS.splice(i, 1);
                 const b = document.getElementById('targetBtn_' + t); if (b) b.remove();
@@ -3508,7 +3518,7 @@
             + '<div class="iph-info"></div><div class="f6-warn" hidden></div>'
             + '<div class="devices-row f6-btns" style="grid-template-columns: repeat(3, 1fr);">'
             + '<button class="dev-btn iph-rec">REC</button><button class="dev-btn iph-scene">SCENE</button>'
-            + '<button class="dev-btn iph-check" title="Measure the iPhone timecode against the bridge LTC now (10 readings)">CHECK TC</button>'
+            + '<button class="dev-btn iph-check" title="Measure the mobile timecode against the bridge LTC now (10 readings)">CHECK TC</button>'
             + '<button class="dev-btn iph-alias" title="Alias for this camera: a short name that goes in the shoot log">ALIAS</button>'
             + '<button class="dev-btn iph-cfg" title="IP address and port">ADDRESS</button>'
             + '<button class="dev-btn iph-del">REMOVE</button></div>';
@@ -3576,7 +3586,7 @@
         btn.disabled = true;
         return fetch('/api/' + ep, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body || {})})
             .then(r => r.json().catch(() => ({})).then(d => ({ok: r.ok && d.ok !== false && !d.error, d})))
-            .catch(e => ({ok: false, d: {error: String(e)}}))
+            .catch(e => ({ok: false, d: {error: curto(e)}}))
             .then(({ok, d}) => {
                 btn.disabled = false;
                 btn.classList.add(ok ? 'flash-ok' : 'flash-err');
@@ -3617,14 +3627,14 @@
     }
     function iphRemove(btn, id) {
         const d = _iphs[id] || {};
-        if (confirm('Remove ' + (d.name || id) + ' from the bridge? (nothing changes on the iPhone)'))
+        if (confirm('Remove ' + (d.name || id) + ' from the bridge? (nothing changes on the mobile)'))
             iphAct(btn, id, 'devices/' + id + '/remove');
     }
     function iphAdd() {
-        const n = prompt('Name for the new iPhone (e.g. iPhone B):'); if (n === null) return;
-        const h = prompt('IP of the iPhone (Blackmagic Camera > web server):'); if (!h) return;
+        const n = prompt('Name for the new mobile (e.g. Mobile B):'); if (n === null) return;
+        const h = prompt('IP of the mobile (Blackmagic Camera > web server):'); if (!h) return;
         const p = prompt('Port:', 4444); if (!p) return;
-        iphAct(document.getElementById('iphDivider'), null, 'devices', {type: 'iphone', name: n.trim(), host: h.trim(), port: parseInt(p, 10)});
+        iphAct(document.getElementById('iphDivider'), null, 'devices', {type: 'mobile', name: n.trim(), host: h.trim(), port: parseInt(p, 10)});
     }
 
 
@@ -3763,7 +3773,7 @@
         btn.disabled = true;
         return fetch('/api/' + ep, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body || {})})
             .then(r => r.json().catch(() => ({})).then(d => ({ok: r.ok && d.ok !== false && !d.error, d})))
-            .catch(e => ({ok: false, d: {error: String(e)}}))
+            .catch(e => ({ok: false, d: {error: curto(e)}}))
             .then(({ok, d}) => {
                 btn.disabled = false;
                 btn.classList.add(ok ? 'flash-ok' : 'flash-err');
@@ -3905,7 +3915,7 @@
         btn.disabled = true;
         return fetch('/api/' + ep, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body || {})})
             .then(r => r.json().catch(() => ({})).then(d => ({ok: r.ok && d.ok !== false && !d.error, d})))
-            .catch(e => ({ok: false, d: {error: String(e)}}))
+            .catch(e => ({ok: false, d: {error: curto(e)}}))
             .then(({ok, d}) => {
                 btn.disabled = false;
                 btn.classList.add(ok ? 'flash-ok' : 'flash-err');
@@ -4126,7 +4136,7 @@
         btn.disabled = true;
         return fetch('/api/' + ep, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body || {})})
             .then(r => r.json().catch(() => ({})).then(d => ({ok: r.ok && d.ok !== false && !d.error, d})))
-            .catch(e => ({ok: false, d: {error: String(e)}}))
+            .catch(e => ({ok: false, d: {error: curto(e)}}))
             .then(({ok, d}) => {
                 btn.disabled = false;
                 btn.classList.add(ok ? 'flash-ok' : 'flash-err');
@@ -4269,19 +4279,26 @@
         btn.disabled = true;
         fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)})
             .then(r => r.json().catch(() => ({})).then(d => { if (!r.ok || d.ok === false) alert(d.error || 'refused'); }))
-            .catch(e => alert(String(e)))
+            .catch(e => alert(curto(e)))
             .then(() => { btn.disabled = false; pollDevices(); });
     }
     // Um so pedido de segundo a segundo para todos os aparelhos (antes um por tipo, mais os guardados): reparte-se aqui.
     let _devBusy = false, _gwS3 = null, _gwC3 = null;
+    // Um pedido a meio quando se muda um nome ou um alias: o que esta a caminho pode ser de antes da mudanca, por isso
+    // pede-se outra vez logo a seguir (sem isto o cartao ficava com o nome antigo ate a volta seguinte; issue #35).
+    let _devOutraVez = false;
     function pollDevices() {
-        if (_devBusy || document.hidden) return;
+        if (document.hidden) return;
+        if (_devBusy) { _devOutraVez = true; return; }
         _devBusy = true;
         getJson('/api/devices').then(d => {
             _devBusy = false;
+            if (_devOutraVez) { _devOutraVez = false; setTimeout(pollDevices, 0); }
             if (!d || !Array.isArray(d.devices)) return;
+            // Os aliases vem tambem aqui: o cartao mostra o novo logo, sem esperar pelo /api/status seguinte.
+            if (d.alias && _state) _state.dev_alias = d.alias;
             const tipo = t => mapaPorId(d.devices.filter(x => x.type === t));
-            aplicarIph(tipo('iphone'));
+            aplicarIph(tipo('mobile'));
             aplicarBm(tipo('bmpcc_extra'), _gwC3);
             aplicarGp(tipo('gopro'), _gwS3);
             aplicarSo(tipo('sony'));
@@ -4554,7 +4571,7 @@
         fetch('/api/' + ep, {method: 'POST', headers: {'Content-Type': 'application/json'},
                              body: JSON.stringify(body || {})})
             .then(r => r.json().catch(() => ({})).then(d => ({ok: r.ok && d.ok !== false && !d.error, d})))
-            .catch(e => ({ok: false, d: {error: String(e)}}))
+            .catch(e => ({ok: false, d: {error: curto(e)}}))
             .then(({ok, d}) => {
                 btn.disabled = false;
                 btn.classList.add(ok ? 'flash-ok' : 'flash-err');

@@ -324,7 +324,7 @@ def api_clock_source():
         comofazer = {"bm": "connect the BMPCC and wait for its timecode",
                      "ltc": "press GET LTC with the generator connected",
                      "ntp": "press GET NTP (needs an uplink)",
-                     "iphone": "press GET PHONE TIME"}[pref]
+                     "iphone": "press GET MOBILE TIME"}[pref]
         temos = [CLOCK_SOURCE_LABELS[k] for k in CLOCK_SOURCES if fontes[k]["ok"]]
         return jsonify({"error": f"No clock from {etiqueta} — {comofazer}, or pick "
                                  f"another source."
@@ -352,7 +352,7 @@ def api_ntp_sync():
     if r.returncode != 0 or not r.stdout.strip():
         return jsonify({"error": "no route to the internet — NTP cannot run and the "
                                  "current clock is left untouched. On location use "
-                                 "the iPhone time or SET SYSTEM CLOCK FROM LTC instead."}), 503
+                                 "the mobile time or SET SYSTEM CLOCK FROM LTC instead."}), 503
 
     # Para medir o salto e preciso uma referencia que o NTP nao mexa: qualquer
     # diferenca entre o tempo decorrido no relogio de parede e no monotonico E
@@ -538,7 +538,7 @@ def api_phone_clear():
     state["_phone_adopted_at"] = None
     nucleo.canon_ccapi.manual_trust_since = 0.0
     nucleo.canon_ccapi.manual_trust_until = 0.0
-    log_event("iPhone time forgotten as a clock source (the system clock itself is unchanged)")
+    log_event("Mobile time forgotten as a clock source (the system clock itself is unchanged)")
     return jsonify({"ok": True, "effective": effective_clock_source()})
 
 

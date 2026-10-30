@@ -96,7 +96,7 @@ Pacotes do sistema (Debian)
 A API
   Toda a API esta em docs/API.md (gerada das rotas do bridge (nucleo.py e rotas_*.py) por atom/app/api_check.py --docs; o mesmo script verifica as regras de
   nomes e se os clientes chamam rotas que existem). Em resumo:
-    - Devices: cada aparelho tem um id unico e tudo sobre ele fica em /api/devices/<id>/...; o tipo (canon, iphone, gopro, bmpcc,
+    - Devices: cada aparelho tem um id unico e tudo sobre ele fica em /api/devices/<id>/...; o tipo (canon, mobile (antes iphone, que ainda vale), gopro, bmpcc,
       bmpcc_extra, f6) e um campo da resposta, nunca parte do caminho. GET /api/devices[?type=canon] lista, GET /api/devices/<id> le um,
       POST /api/devices {type, ...} acrescenta, POST /api/devices/<id>/<accao> actua (rec, connect, af, remove, restore, ...),
       POST /api/devices/batch {action, type, ...} actua sobre varios (order, reset, settings_polling, lead).

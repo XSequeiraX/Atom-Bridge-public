@@ -113,7 +113,7 @@ def page(num, title, subtitle, diagram, notes=(), cor="sys"):
 def capa():
     d = Diagram(500)
     areas = [("rec", "REC / STOP", "group and per-device recording"), ("time", "TIME", "timecode, clocks, jam"),
-             ("cams", "CAMERAS", "BMPCC, Canon, Sony, iPhone, GoPro"), ("gw", "GATEWAYS", "C3 (BMPCC) and S3 (GoPro)"),
+             ("cams", "CAMERAS", "BMPCC, Canon, Sony, mobiles, GoPro"), ("gw", "GATEWAYS", "C3 (BMPCC) and S3 (GoPro)"),
              ("f6", "ZOOM F6", "FRC-8 link, card, jam"), ("log", "LOGS", "shoot log, takes, SFTP"),
              ("net", "NETWORK", "camera AP, uplink, web"), ("sys", "SYSTEM", "services, update, access")]
     for i, (k, t, s) in enumerate(areas):
@@ -146,7 +146,7 @@ def hardware():
     d.node("aud", 530, 360, 180, 60, "Audio jacks", ["mic in: LTC · phones out: jam"], "time")
     d.node("canon", 30, 14, 200, 56, "Canon R10 / R6 II", ["CCAPI over Wi-Fi"], "cams")
     d.node("sony", 30, 76, 200, 56, "Sony Alpha / FX / ZV", ["Wi-Fi (camera AP) or USB"], "cams")
-    d.node("iph", 30, 138, 200, 56, "iPhones", ["Blackmagic Camera app"], "cams")
+    d.node("iph", 30, 138, 200, 56, "Mobiles", ["Blackmagic Camera app"], "cams")
     d.node("c3", 30, 205, 200, 56, "C3 gateway", ["Wi-Fi ↔ BLE · MicroPython"], "gw")
     d.node("bmpcc", 30, 295, 200, 56, "BMPCC", ["Bluetooth LE"], "cams")
     d.node("s3", 30, 385, 200, 56, "S3 gateway", ["Wi-Fi ↔ BLE · Arduino"], "gw")
@@ -194,7 +194,7 @@ def software():
     d.node("usb", 185, 300, 145, 70, "bridge-usb", ["API 8091 (local)"], "sys")
     d.node("br", 870, 40, 150, 70, "Browser", ["phone, iPad, laptop"], "net")
     d.node("gw", 870, 160, 150, 70, "Gateways", ["C3, S3 (Wi-Fi)"], "gw")
-    d.node("cm", 870, 280, 150, 70, "Canon, iPhones, Sony", ["Wi-Fi APIs / SDK"], "cams")
+    d.node("cm", 870, 280, 150, 70, "Canon, mobiles, Sony", ["Wi-Fi APIs / SDK"], "cams")
     d.node("f6", 870, 400, 150, 60, "Zoom F6", ["USB"], "f6")
     d.arrow("boot", "r", "con", "l", "starts", "sys")
     d.arrow("con", "r", "api", (365, 75), "HTTP", "sys")
@@ -264,7 +264,7 @@ def grupo():
     d.node("arm", 500, 175, 200, 60, "START armed devices", ["only those ready"], "rec")
     d.node("f6q", 500, 265, 200, 90, "F6 armed with no track?", [], "f6", "diamond")
     d.node("refuse", 760, 280, 260, 60, "Refused", ["'F6: no track armed'"], "bad")
-    d.node("fire", 270, 390, 500, 66, "Fire all in parallel", ["Canons · Sony · iPhones · GoPros · BMPCC extras · main BMPCC · F6"], "rec")
+    d.node("fire", 270, 390, 500, 66, "Fire all in parallel", ["Canons · Sony · mobiles · GoPros · BMPCC extras · main BMPCC · F6"], "rec")
     d.node("conf", 270, 490, 240, 60, "Each confirms", ["own state, timeout"], "ok")
     d.node("fault", 540, 490, 230, 60, "No confirm → FAULT", ["warning + shoot log"], "bad")
     d.node("log", 800, 490, 220, 60, "Shoot log", ["start / stop per device, take no."], "log")
@@ -299,7 +299,7 @@ def por_aparelho():
     d = Diagram(580)
     lanes = [("Canon (R10, R6 II)", "cams", ["CCAPI recbutton (video mode)", "reply lost → probe confirms", "periodic check: stopped on its own?"]),
              ("Sony (Camera Remote SDK)", "cams", ["SDK MovieRecord (sony_ctl)", "RecordingState confirms (6 s)", "toggle models handled"]),
-             ("iPhone (Blackmagic app)", "cams", ["REST /transports/0/record", "confirm within 3 s", "reads older than the command ignored"]),
+             ("Mobile (Blackmagic app)", "cams", ["REST /transports/0/record", "confirm within 3 s", "reads older than the command ignored"]),
              ("GoPro (via S3)", "gw", ["S3 queues the command (seq)", "poll until done, then real state", "out-of-order replies dropped"]),
              ("BMPCC extra (own C3)", "gw", ["C3 writes the BLE command", "transport packet confirms", "3 retries on Wi-Fi hiccups"]),
              ("Main BMPCC", "cams", ["BLE write (C3 or plan B)", "confirm within 5 s", "drop handled once"]),
@@ -323,9 +323,9 @@ def tempo():
     d.node("ltc", 280, 20, 230, 60, "LTC by cable", ["mic input · 3 s read"], "time")
     d.node("ble", 280, 100, 230, 60, "TC-1 by Bluetooth", ["15 s scan · Sidus app open"], "time")
     d.node("jam", 570, 50, 220, 70, "GET LTC → jam", ["offset kept vs Atom clock"], "time")
-    d.node("src", 570, 170, 220, 80, "Time source in use", ["BM TC · LTC · NTP · iPhone"], "time", "diamond")
+    d.node("src", 570, 170, 220, 80, "Time source in use", ["BM TC · LTC · NTP · mobile"], "time", "diamond")
     d.node("ntp", 850, 140, 170, 56, "NTP", ["via uplink"], "net")
-    d.node("iph", 850, 215, 170, 56, "iPhone time", ["operator offer"], "net")
+    d.node("iph", 850, 215, 170, 56, "Mobile time", ["operator offer"], "net")
     d.node("cams", 280, 300, 230, 60, "Set camera clocks", ["Canon (clock), BMPCC, Sony (TC)"], "cams")
     d.node("gp", 20, 300, 220, 60, "GoPro", ["QR (GoPro Labs) · check clock"], "gw")
     d.node("f6", 570, 300, 220, 60, "F6 jam", ["LTC out of headphones, ~5 s"], "f6")
@@ -448,7 +448,7 @@ def logs():
     d.node("next", 820, 30, 200, 60, "Next take", ["N + 1"], "log")
     d.node("rs", 300, 140, 180, 70, "Bridge restarts", ["within 180 s, a start", "resumes the same take"], "sys")
     d.node("mk", 20, 140, 210, 70, "Marks and notes", ["G good · N no-good · M mark", "notes on the take"], "log")
-    d.node("sl", 560, 140, 210, 70, "Slate between takes", ["scene, reel, take → BMPCC", "and iPhones every 5 s"], "log")
+    d.node("sl", 560, 140, 210, 70, "Slate between takes", ["scene, reel, take → BMPCC", "and mobiles every 5 s"], "log")
     d.node("csv", 280, 270, 230, 60, "shoot_log.csv", ["one line per event"], "log")
     d.node("ev", 560, 270, 210, 60, "events.log", ["what happened, trimmed"], "log")
     d.node("arc", 20, 270, 210, 60, "New log", ["archives with date"], "log")
@@ -580,7 +580,7 @@ def verificacao():
     fixed = [
         ("Interfaces renamed by sed over bridge.py", "Installer rewrote every matching word (it had damaged a comment). Now the names come from ap.conf."),
         ("SFTP send", "No feedback; archives re-sent each time. Now progress bar, result, archives already on the server skipped."),
-        ("Stale reads after a command", "Page, console, GoPro, iPhone, Canon: an old reply no longer undoes a new command."),
+        ("Stale reads after a command", "Page, console, GoPro, mobile, Canon: an old reply no longer undoes a new command."),
         ("Group REC with disarmed devices", "Next press stops everything recording, even devices disarmed mid-take."),
         ("Per-device REC", "Never stops other devices; second GoPro right after the first goes the right way."),
         ("Update looked stuck", "Version is recorded; 'pulled but not installed' is detected and offered."),

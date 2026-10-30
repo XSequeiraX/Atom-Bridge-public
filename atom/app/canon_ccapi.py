@@ -27,6 +27,8 @@ import threading
 import requests
 import urllib3
 
+from curto import curto
+
 # Camera bodies that only support HTTPS (e.g. the R6 II) use CCAPI's
 # self-signed cert, so sessions below run with verify=False by design —
 # silence the resulting per-request InsecureRequestWarning noise in the
@@ -283,6 +285,7 @@ class CanonCamera:
         return bool(self.state["recording"]) or bool(incerto and time.time() - incerto < 1800)
 
     def _log(self, msg):
+        msg = curto(msg)
         ts = time.strftime("%H:%M:%S")
         entry = f"[{ts}] {msg}"
         self.state["log"].append(entry)

@@ -40,7 +40,7 @@ DOMINIOS = {
     "rec", "devices", "slate", "log", "time",
     "gateways", "bluetooth",
 }
-TIPOS = ("canon", "iphone", "gopro", "bmpcc", "bmpcc_extra", "sony", "f6")
+TIPOS = ("canon", "mobile", "gopro", "bmpcc", "bmpcc_extra", "sony", "f6")
 PARAMETROS = {"id", "name"}
 PAGINAS_FORA_DE_API = {"/login", "/", "/view", "/shootlog", "/eventlog", "/f6card", "/gopro_qr", "/manifest.json",
                        "/sw.js", "/icon-192.png", "/icon-512.png", "/favicon.ico", "/fonts/<path:nome>"}

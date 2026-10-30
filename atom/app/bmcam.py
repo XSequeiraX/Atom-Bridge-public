@@ -44,6 +44,7 @@ import threading
 import time
 from vigiado import vigiado
 import gravar
+from curto import erro
 
 API = "/control/api/v1"
 WS_PATH = API + "/event/websocket"
@@ -134,7 +135,7 @@ class BMCam:
         return self.cfg.get("name") or self.id
 
     def log(self, msg):
-        self._log(msg.replace("iPhone", self.name, 1) if msg.startswith("iPhone") else "%s: %s" % (self.name, msg))
+        self._log(msg.replace("Mobile", self.name, 1) if msg.startswith("Mobile") else "%s: %s" % (self.name, msg))
 
     # --- configuracao ------------------------------------------------------------
     def configure(self, host=None, port=None, enabled=None, name=None):
@@ -158,7 +159,7 @@ class BMCam:
         liga_muda = (host is not None and host != self.cfg.get("host")) or \
                     (port is not None and port != self.cfg.get("port")) or enabled is False
         if liga_muda and self.running():
-            return False, "%s is recording: change it after the take" % (self.cfg.get("name") or "the iPhone")
+            return False, "%s is recording: change it after the take" % (self.cfg.get("name") or "the mobile")
         if host is not None:
             self.cfg["host"] = host
         if port is not None:
@@ -173,7 +174,7 @@ class BMCam:
         for canal in self._http:
             with self._http_lock[canal]:
                 self._fechar_http(canal)
-        self.log("iPhone: %s:%s %s" % (self.cfg["host"], self.cfg["port"],
+        self.log("Mobile: %s:%s %s" % (self.cfg["host"], self.cfg["port"],
                                        "enabled" if self.cfg["enabled"] else "disabled"))
         return True, None
 
@@ -216,11 +217,11 @@ class BMCam:
                     self._fechar_http(canal)
                     if reaproveitada and tentativa == 1:
                         continue
-                    self.error = "%s: %s" % (type(e).__name__, e)
+                    self.error = erro(e)
                     return None, None
                 except Exception as e:
                     self._fechar_http(canal)
-                    self.error = "%s: %s" % (type(e).__name__, e)
+                    self.error = erro(e)
                     return None, None
                 self._ok_at = time.time()        # respondeu, mesmo que com erro
                 try:
@@ -232,7 +233,7 @@ class BMCam:
     # --- interface de alvo -----------------------------------------------------------
     def start(self):
         threading.Thread(target=self._ws_loop, daemon=True, name="iphone-ws").start()
-        threading.Thread(target=vigiado(self._poll_loop, "iPhone " + self.id, self.log), daemon=True, name="iphone-poll").start()
+        threading.Thread(target=vigiado(self._poll_loop, "Mobile " + self.id, self.log), daemon=True, name="iphone-poll").start()
 
     def connected(self):
         return self.cfg.get("enabled") and time.time() - self._ok_at < VIVO
@@ -294,7 +295,7 @@ class BMCam:
             time.sleep(0.2)
         if n is not None and n != self._cmd_n:
             return
-        self.log("iPhone did NOT confirm %s within %.0f s" % ("REC" if on else "STOP", CONFIRM))
+        self.log("Mobile did NOT confirm %s within %.0f s" % ("REC" if on else "STOP", CONFIRM))
         # A app aceitou o pedido mas nao mudou de estado: antes ficava so no registo de eventos, e o shoot log com um
         # start que nao houve. Agora fica no shoot log e da aviso a vista.
         txt = "%s did NOT %s (the app accepted the command but did not change state in %.0f s)" % (
@@ -304,7 +305,7 @@ class BMCam:
                 try:
                     fn(*args)
                 except Exception as e:                  # pylint: disable=broad-except
-                    self.log("iPhone: %r" % e)
+                    self.log("Mobile: %r" % e)
 
     def check_tc(self, amostras=10):
         """Mede ja o desvio do TC do iPhone para o LTC (a pedido, a seguir a um
@@ -316,7 +317,7 @@ class BMCam:
         tc, off, err = st.get("tc"), st.get("tc_offset"), st.get("tc_err")
         fonte = (st.get("tcsource") or {}).get("timecodeInputSource") or "?"
         if tc is None:
-            return False, "the iPhone did not answer the timecode request"
+            return False, "the mobile did not answer the timecode request"
         if off is None:
             return False, "no LTC in the bridge to compare with (GET LTC first)"
         txt = "%s: TC %s (%s) is %+.2f s vs LTC (+-%.2f, %d samples)" % (self.name, tc, fonte, off, err or 0, amostras)
@@ -334,7 +335,7 @@ class BMCam:
         fonte = (st.get("tcsource") or {}).get("timecodeInputSource") or "?"
         if tc is None:
             return
-        nota = "%s: iPhone TC %s (%s)" % (quando, tc, fonte)
+        nota = "%s: mobile TC %s (%s)" % (quando, tc, fonte)
         if off is not None:
             nota += " is %+.2f s vs LTC (+-%.2f)" % (off, err or 0)
         else:
@@ -342,7 +343,7 @@ class BMCam:
         try:
             self.shot("tc", nota)
         except Exception as e:
-            self.log("iPhone: shoot log: %r" % e)
+            self.log("Mobile: shoot log: %r" % e)
 
     # --- claquete ---------------------------------------------------------------------
     def set_scene(self, scene):
@@ -357,7 +358,7 @@ class BMCam:
         s, r = self._req("GET", "/slates/nextClip", timeout=2, canal="cmd")
         if s == 200 and r is not None:
             self._set("nextClip", r)
-        self.log("iPhone: scene set to %s" % scene)
+        self.log("Mobile: scene set to %s" % scene)
         return True, None
 
     def set_next_slate(self, cena, take, reel=None):
@@ -387,9 +388,9 @@ class BMCam:
             return
         s, r = self._req("PUT", "/slates/lastClip", {"clip": clip}, canal="cmd")
         if s in (200, 204):
-            self.log("iPhone: last clip slate %s" % ", ".join("%s %s" % kv for kv in clip.items()))
+            self.log("Mobile: last clip slate %s" % ", ".join("%s %s" % kv for kv in clip.items()))
         else:
-            self.log("iPhone: could not write the slate of the last clip (HTTP %s %s)" % (s, r or ""))
+            self.log("Mobile: could not write the slate of the last clip (HTTP %s %s)" % (s, r or ""))
 
     def on_mark(self, kind):
         """G / N do bridge: goodTake no ultimo clip do iPhone."""
@@ -398,7 +399,7 @@ class BMCam:
 
         def fazer():
             s, _ = self._req("PUT", "/slates/lastClip", {"clip": {"goodTake": kind == "good"}}, canal="cmd")
-            self.log("iPhone: last clip %s %s" % ("GOOD" if kind == "good" else "NO-GOOD",
+            self.log("Mobile: last clip %s %s" % ("GOOD" if kind == "good" else "NO-GOOD",
                                                    "" if s in (200, 204) else "FAILED (HTTP %s)" % s))
         threading.Thread(target=fazer, daemon=True).start()
 
@@ -464,7 +465,7 @@ class BMCam:
                 bruto = (valor or {}).get("shutterAngle") if isinstance(valor, dict) else valor
                 if shutter_normal(bruto) is None and bruto is not None and bruto != self._shutter_avisado:
                     self._shutter_avisado = bruto
-                    self.log("iPhone: shutter angle from the app not usable, shown as -: %r" % (bruto,))
+                    self.log("Mobile: shutter angle from the app not usable, shown as -: %r" % (bruto,))
             if chave == "workingset":
                 rem = self._restante_app()
                 if rem != self._rem_val:                 # so conta quando a app muda o valor
@@ -487,12 +488,12 @@ class BMCam:
         if self._expect is not None and agora == self._expect:
             return                      # comandado pelo bridge: o _confirmar trata
         self._expect = agora
-        self.log("iPhone %s by itself (not commanded by the bridge)" % ("started" if agora else "stopped"))
+        self.log("Mobile %s by itself (not commanded by the bridge)" % ("started" if agora else "stopped"))
         if self.on_unexpected:
             try:
                 self.on_unexpected(agora)
             except Exception as e:
-                self.log("iPhone callback: %r" % e)
+                self.log("Mobile callback: %r" % e)
         if not agora:                   # a linha do stop ja existe (on_unexpected): so entao se pode anotar o clip
             threading.Thread(target=self._clip_fechado, daemon=True).start()
 
@@ -506,9 +507,9 @@ class BMCam:
             if nome:
                 self.on_clip(str(nome))
             else:
-                self.log("iPhone: no clip name after STOP (HTTP %s)" % s)
+                self.log("Mobile: no clip name after STOP (HTTP %s)" % s)
         except Exception as e:                  # pylint: disable=broad-except
-            self.log("iPhone: clip name: %r" % e)
+            self.log("Mobile: clip name: %r" % e)
 
     def _ler_record(self, canal="poll"):
         t0 = time.monotonic()
@@ -605,11 +606,11 @@ class BMCam:
                 self._ws_sessao(gen)
             except Exception as e:
                 if self._ws_ok:
-                    self.log("iPhone: websocket closed (%s); polling instead" % e)
+                    self.log("Mobile: websocket closed (%s); polling instead" % e)
             # Se a app fechou o WebSocket logo a seguir aos extras, e por causa deles: nao se insiste.
             if self._ws_extras_enviados and time.time() - inicio < 10 and not self._ws_sem_extras:
                 self._ws_sem_extras = True
-                self.log("iPhone: the app refused the extra subscriptions; asking them slowly instead")
+                self.log("Mobile: the app refused the extra subscriptions; asking them slowly instead")
             self._ws_ok = False
             self._ws_props = set()
             time.sleep(3)
@@ -646,7 +647,7 @@ class BMCam:
             self._ws_props = {p for p in base if p in PROPS}
             self._ws_ok = True
             self._ok_at = time.time()
-            self.log("iPhone: websocket connected")
+            self.log("Mobile: websocket connected")
             s.settimeout(2)
             while gen == self._gen and self.cfg.get("enabled") and self._vivo:
                 try:
@@ -660,7 +661,7 @@ class BMCam:
                             raise ConnectionError("no answer")
                     continue
                 if m is None:
-                    raise ConnectionError("closed by the iPhone")
+                    raise ConnectionError("closed by the mobile")
                 self._ok_at = time.time()
                 try:
                     msg = json.loads(m)
@@ -699,7 +700,7 @@ class Fleet:
             pass
         if not isinstance(lista, dict) or not isinstance(lista.get("iphones"), dict):
             # primeira vez: o iPhone testado a 2026-10-08
-            lista = {"iphones": {"iphone1": {"name": "iPhone A", "host": "192.168.4.11", "port": 4444,
+            lista = {"iphones": {"iphone1": {"name": "Mobile A", "host": "192.168.4.11", "port": 4444,
                                              "enabled": True, "scene": ""}}}
         self._cfg = lista
         self.cams = {}
@@ -725,7 +726,7 @@ class Fleet:
                 json.dump(self._cfg, f, indent=1)
             gravar.trocar(tmp, self.cfg_path)
         except OSError as e:
-            self.log("iPhones: could not save %s: %s" % (self.cfg_path, e))
+            self.log("Mobiles: could not save %s: %s" % (self.cfg_path, e))
 
     def start(self):
         self._arrancou = True
@@ -761,7 +762,7 @@ class Fleet:
                 n += 1
             cid = "iphone%d" % n
             letra = chr(ord("A") + (n - 1) % 26)
-            c = {"name": "iPhone %s" % letra, "host": "", "port": 4444, "enabled": True, "scene": ""}
+            c = {"name": "Mobile %s" % letra, "host": "", "port": 4444, "enabled": True, "scene": ""}
             cam = self._criar(cid, c)
             ok, err = cam.configure(host=host, port=port, name=name or c["name"])
             if not ok:
@@ -771,14 +772,14 @@ class Fleet:
             self.save()
         if self._arrancou:
             cam.start()
-        self.log("iPhones: %s added (%s:%s)" % (cam.name, c["host"], c["port"]))
+        self.log("Mobiles: %s added (%s:%s)" % (cam.name, c["host"], c["port"]))
         return True, cid
 
     def remove(self, cid):
         with self._lock:
             cam = self.cams.get(cid)
             if not cam:
-                return False, "no iPhone %s" % cid
+                return False, "no mobile %s" % cid
             if cam.running():
                 return False, "%s is recording: stop it first" % cam.name
             cam._vivo = False
@@ -786,7 +787,7 @@ class Fleet:
             # Guarda-se a configuracao: retirar nao apaga, volta-se a activar da lista.
             self._cfg.setdefault("removed", {})[cid] = self._cfg["iphones"].pop(cid, None) or dict(cam.cfg)
             self.save()
-        self.log("iPhones: %s removed (kept in the saved list)" % cam.name)
+        self.log("Mobiles: %s removed (kept in the saved list)" % cam.name)
         return True, None
 
     def removed_list(self):
@@ -799,9 +800,9 @@ class Fleet:
         with self._lock:
             c = (self._cfg.get("removed") or {}).pop(cid, None)
             if not isinstance(c, dict):
-                return False, "no saved iPhone %s" % cid
+                return False, "no saved mobile %s" % cid
             self.save()
-        self.log("iPhones: %s forgotten" % (c.get("name") or cid))
+        self.log("Mobiles: %s forgotten" % (c.get("name") or cid))
         return True, None
 
     def restore(self, cid):
@@ -809,7 +810,7 @@ class Fleet:
         with self._lock:
             c = (self._cfg.get("removed") or {}).get(cid)
             if not isinstance(c, dict):
-                return False, "no saved iPhone %s" % cid
+                return False, "no saved mobile %s" % cid
             novo = cid                        # o id e estavel: volta com o que tinha (so muda se estiver em uso)
             n = 1
             while novo in self.cams:
@@ -822,7 +823,7 @@ class Fleet:
             self.save()
         if self._arrancou:
             cam.start()
-        self.log("iPhones: %s restored" % cam.name)
+        self.log("Mobiles: %s restored" % cam.name)
         return True, novo
 
 

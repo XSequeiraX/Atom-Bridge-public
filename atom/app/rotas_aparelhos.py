@@ -10,6 +10,7 @@ import re
 import threading
 import time
 from flask import Response, jsonify, request, send_from_directory, stream_with_context
+from curto import erro as erro_curto
 import nucleo
 from nucleo import (SHOOT_LOG_PATH, _CANON_ORIGEM, _a_gravar_ids, _alvos_lock, _alvos_tirar, _bmpcc_activar,
     _bmpcc_gravar, _bmpcc_guardar, _bmpcc_livre, _body, _camera_cancel, _dev_canon_removidos, _dev_gravar,
@@ -145,7 +146,15 @@ def api_rec_target():
 
 
 # ---- o registo unico: UM id por aparelho, em toda a API (o tipo e um campo, nunca parte do caminho) ----
-_DEV_TIPOS_API = ("canon", "iphone", "gopro", "bmpcc", "bmpcc_extra", "sony", "f6")
+_DEV_TIPOS_API = ("canon", "mobile", "gopro", "bmpcc", "bmpcc_extra", "sony", "f6")
+# O tipo dos telemoveis com a app Blackmagic Camera (iPhone ou Android) chamava-se "iphone": continua a valer como
+# sinonimo a entrada (?type=iphone, {"type": "iphone"}), para nao partir scripts e clientes antigos. Os ids ("iphone1")
+# e o ficheiro iphones.json ficam como estavam.
+_TIPO_SINONIMO = {"iphone": "mobile"}
+
+
+def _tipo_norm(t):
+    return _TIPO_SINONIMO.get(t, t) if isinstance(t, str) else t
 
 
 def _dev_exige(cid, tipos, acao, removido_ok=False, ativo_erro=None):
@@ -192,7 +201,7 @@ def _dev_itens(tipo=None):
         out += [_dev_item("canon", cid, cam, d) for cid, cam in list(nucleo.canon_ccapi.CAMERAS.items())]
     if tipo in (None, "bmpcc") and nucleo.BMPCC_ACTIVE:
         out.append(_dev_item("bmpcc", "bmpcc", None))
-    for t, frota in (("iphone", nucleo.iphs), ("gopro", nucleo.gofleet), ("bmpcc_extra", nucleo.bmfleet), ("sony", nucleo.sonys)):
+    for t, frota in (("mobile", nucleo.iphs), ("gopro", nucleo.gofleet), ("bmpcc_extra", nucleo.bmfleet), ("sony", nucleo.sonys)):
         if tipo in (None, t):
             out += [_dev_item(t, cid, cam) for cid, cam in sorted(frota.cams.items())]
     if tipo in (None, "f6"):
@@ -208,8 +217,8 @@ def _dev_removidos(tipo=None):
         for cid, c in _dev_canon_removidos(d).items():
             nome, ip = (c.get("name"), c.get("ip")) if isinstance(c, dict) else (c.name, c.ip)
             out.append({"id": cid, "type": "canon", "name": nome, "ip": ip})
-    if tipo in (None, "iphone"):
-        out += [{"id": cid, "type": "iphone", "name": c.get("name"), "ip": c.get("host")}
+    if tipo in (None, "mobile"):
+        out += [{"id": cid, "type": "mobile", "name": c.get("name"), "ip": c.get("host")}
                 for cid, c in _dev_iphones_tirados_cfg().items()]
     if tipo in (None, "bmpcc"):
         out += [{"id": k, "type": "bmpcc", "name": v.get("alias") or "BMPCC", "ip": v.get("address"),
@@ -223,10 +232,10 @@ def _dev_removidos(tipo=None):
 @app.route('/api/devices')
 def api_devices():
     """Todos os aparelhos do rig: devices (em servico, um item cada com id e type), removed (retirados, para restaurar ou
-    esquecer), order, alias e o bloco bmpcc. ?type= filtra por tipo (canon, iphone, gopro, bmpcc, bmpcc_extra, sony, f6)."""
+    esquecer), order, alias e o bloco bmpcc. ?type= filtra por tipo (canon, mobile (ou iphone), gopro, bmpcc, bmpcc_extra, sony, f6)."""
     if not request.headers.get("X-Bridge-Service"):
         state["_last_ui_poll"] = time.time()
-    tipo = request.args.get("type")
+    tipo = _tipo_norm(request.args.get("type"))
     if tipo is not None and tipo not in _DEV_TIPOS_API:
         return jsonify({"ok": False, "error": "type: " + " | ".join(_DEV_TIPOS_API)}), 400
     d = _dev_ler()
@@ -251,7 +260,7 @@ def api_device(id):
 
 @app.route('/api/devices/<id>/alias', methods=['POST'])
 def api_dev_alias(id):
-    """[canon, iphone, gopro, bmpcc, bmpcc_extra, sony, f6] Alias da camara, um nome curto de referencia (vai para a coluna alias do shoot log):
+    """[canon, mobile, gopro, bmpcc, bmpcc_extra, sony, f6] Alias da camara, um nome curto de referencia (vai para a coluna alias do shoot log):
     {"alias": texto}. Vazio apaga."""
     import re
     alias = str(_body().get("alias") or "").strip()
@@ -335,7 +344,7 @@ def _add_canon(b):
         if any(c.get("ip") == ip or str(c.get("name")).lower() == nome.lower() for c in guardadas.values()):
             return jsonify({"ok": False, "error": "it is in the saved list: restore it from there"}), 409
         base = re.sub(r"[^a-z0-9]", "", nome.lower()) or "canon"
-        if _id_reservado(base):               # "iphone", "bm2"...: nunca ficam livres a juntar um numero
+        if _id_reservado(base):               # "mobile", "bm2"...: nunca ficam livres a juntar um numero
             base = "canon" + base
         cid, n = base, 2
         while _dev_id_ocupado(cid):
@@ -479,16 +488,16 @@ def _bmpcc_chave(cid):
 
 @app.route('/api/devices', methods=['POST'])
 def api_devices_add():
-    """Acrescenta um aparelho: {"type": "canon", name, ip, port, https} | {"type": "iphone", name, host, port} |
+    """Acrescenta um aparelho: {"type": "canon", name, ip, port, https} | {"type": "mobile", name, host, port} |
     {"type": "gopro", mac, model, name, gw} | {"type": "bmpcc", address, alias} | {"type": "bmpcc_extra", name, host} |
     {"type": "sony", name, model, via: "ip" | "usb", host | serial, ssh, user, password}
     (409 se os avisos de licenca ainda nao foram aceites: GET/POST /api/system/terms).
     Devolve o id novo (o da BMPCC e sempre "bmpcc")."""
     b = _body()
-    tipo = b.get("type")
+    tipo = _tipo_norm(b.get("type"))
     if tipo == "f6":
         return jsonify({"ok": False, "error": "add is not supported by f6 devices"}), 409
-    adders = {"canon": _add_canon, "iphone": _add_iphone, "gopro": _add_gopro, "bmpcc": _add_bmpcc,
+    adders = {"canon": _add_canon, "mobile": _add_iphone, "gopro": _add_gopro, "bmpcc": _add_bmpcc,
               "bmpcc_extra": _add_bmpcc_extra, "sony": _add_sony}
     if not isinstance(tipo, str) or tipo not in adders:
         return jsonify({"ok": False, "error": "type: " + " | ".join(adders)}), 400
@@ -497,29 +506,29 @@ def api_devices_add():
 
 @app.route('/api/devices/<id>/remove', methods=['POST'])
 def api_dev_remove(id):
-    """[canon, iphone, gopro, bmpcc, bmpcc_extra, sony] Tira o aparelho de servico (recusado a gravar). Canon, iPhone, BMPCC
+    """[canon, mobile, gopro, bmpcc, bmpcc_extra, sony] Tira o aparelho de servico (recusado a gravar). Canon, mobile, BMPCC
     e Sony ficam na lista dos retirados (restore); a GoPro e a BMPCC extra apagam-se."""
-    tipo, _h, erro = _dev_exige(id, ("canon", "iphone", "gopro", "bmpcc", "bmpcc_extra", "sony"), "remove")
+    tipo, _h, erro = _dev_exige(id, ("canon", "mobile", "gopro", "bmpcc", "bmpcc_extra", "sony"), "remove")
     if erro:
         return erro
     if tipo == "canon":
         return _remove_canon(id)
     if tipo == "bmpcc":
         return _remove_bmpcc()
-    return _remover_da_frota({"iphone": nucleo.iphs, "gopro": nucleo.gofleet, "bmpcc_extra": nucleo.bmfleet,
+    return _remover_da_frota({"mobile": nucleo.iphs, "gopro": nucleo.gofleet, "bmpcc_extra": nucleo.bmfleet,
                               "sony": nucleo.sonys}[tipo], id)
 
 
 @app.route('/api/devices/<id>/restore', methods=['POST'])
 def api_dev_restore(id):
-    """[canon, iphone, bmpcc, sony] Volta a pôr em servico um aparelho retirado (a BMPCC que estava em servico fica guardada)."""
-    tipo, _h, erro = _dev_exige(id, ("canon", "iphone", "bmpcc", "sony"), "restore", removido_ok=True,
+    """[canon, mobile, bmpcc, sony] Volta a pôr em servico um aparelho retirado (a BMPCC que estava em servico fica guardada)."""
+    tipo, _h, erro = _dev_exige(id, ("canon", "mobile", "bmpcc", "sony"), "restore", removido_ok=True,
                                 ativo_erro=f"{id} is already active")
     if erro:
         return erro
     if tipo == "canon":
         return _restore_canon(id)
-    if tipo in ("iphone", "sony"):
+    if tipo in ("mobile", "sony"):
         return _restore_iphone(id, nucleo.sonys if tipo == "sony" else None)
     return _restore_bmpcc(_bmpcc_chave(id))
 
@@ -766,7 +775,7 @@ def _batch_gopro_lead():
 
 def _dev_forget(kind, cid):
     """Apaga de vez um aparelho da lista dos guardados. `kind` e o tipo do device."""
-    if kind in ("iphone", "sony"):
+    if kind in ("mobile", "sony"):
         ok, err = (nucleo.sonys if kind == "sony" else nucleo.iphs).forget(cid)
         if ok:
             with _dev_lock:
@@ -802,8 +811,8 @@ def _dev_forget(kind, cid):
 
 @app.route('/api/devices/<id>/forget', methods=['POST'])
 def api_dev_forget(id):
-    """[canon, iphone, bmpcc, sony] Apaga de vez um aparelho retirado da lista dos guardados."""
-    tipo, _h, erro = _dev_exige(id, ("canon", "iphone", "bmpcc", "sony"), "forget", removido_ok=True,
+    """[canon, mobile, bmpcc, sony] Apaga de vez um aparelho retirado da lista dos guardados."""
+    tipo, _h, erro = _dev_exige(id, ("canon", "mobile", "bmpcc", "sony"), "forget", removido_ok=True,
                                 ativo_erro=f"{id} is in service: remove it first")
     if erro:
         return erro
@@ -920,21 +929,21 @@ def api_sony_sdk():
 
 @app.route('/api/devices/<id>/config', methods=['POST'])
 def api_dev_config(id):
-    """[iphone, bmpcc_extra, sony] Nome / endereco / porta / ligado: iPhone {name, host, port, enabled}; BMPCC extra
+    """[mobile, bmpcc_extra, sony] Nome / endereco / porta / ligado: mobile {name, host, port, enabled}; BMPCC extra
     {name, host}; Sony {name, model, via, host, serial, ssh, user, password, enabled}."""
-    tipo, cam, erro = _dev_exige(id, ("iphone", "bmpcc_extra", "sony"), "config")
+    tipo, cam, erro = _dev_exige(id, ("mobile", "bmpcc_extra", "sony"), "config")
     if erro:
         return erro
     if tipo == "sony":
         return _config_sony(id)
-    return _config_iphone(cam) if tipo == "iphone" else _config_bmpcc_extra(id)
+    return _config_iphone(cam) if tipo == "mobile" else _config_bmpcc_extra(id)
 
 
 @app.route('/api/devices/<id>/tc', methods=['POST'])
 def api_dev_tc(id):
-    """[iphone, sony] iPhone: mede ja o desvio do timecode para o LTC (10 amostras). Sony: escreve o Time Code Preset
+    """[mobile, sony] Mobile: mede ja o desvio do timecode para o LTC (10 amostras). Sony: escreve o Time Code Preset
     (camara parada): {"tc": "HH:MM:SS:FF"}, ou sem tc o LTC de agora."""
-    tipo, cam, erro = _dev_exige(id, ("iphone", "sony"), "tc")
+    tipo, cam, erro = _dev_exige(id, ("mobile", "sony"), "tc")
     if erro:
         return erro
     if tipo == "sony":
@@ -954,8 +963,8 @@ def api_dev_tc(id):
 
 @app.route('/api/devices/<id>/scene', methods=['POST'])
 def api_dev_scene(id):
-    """[iphone, f6] Cena da claquete: iPhone {scene} (proximos clips); F6 {name} ou {inc: true} (cena +1)."""
-    tipo, cam, erro = _dev_exige(id, ("iphone", "f6"), "scene")
+    """[mobile, f6] Cena da claquete: mobile {scene} (proximos clips); F6 {name} ou {inc: true} (cena +1)."""
+    tipo, cam, erro = _dev_exige(id, ("mobile", "f6"), "scene")
     if erro:
         return erro
     if tipo == "f6":
@@ -968,7 +977,7 @@ def api_dev_scene(id):
 
 @app.route('/api/devices/<id>/rec', methods=['POST'])
 def api_dev_rec(id):
-    """[canon, iphone, gopro, bmpcc, bmpcc_extra, sony, f6] REC/STOP so deste device, sem mexer nos alvos nem nos outros: o botao
+    """[canon, mobile, gopro, bmpcc, bmpcc_extra, sony, f6] REC/STOP so deste device, sem mexer nos alvos nem nos outros: o botao
     REC de cada linha, da consola e do USB. Passa pelo mesmo REC de grupo (fila, intencao e confirmacao) com um so
     alvo."""
     tipo, cam, erro = _dev_exige(id, None, "rec")
@@ -1100,7 +1109,7 @@ def api_dev_afpoint(id):
     try:
         out = cam.set_af_point(data["u"], data["v"])
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 503
+        return jsonify({"ok": False, "error": erro_curto(e)}), 503
     return jsonify({"ok": True, **out})
 
 
@@ -1115,7 +1124,7 @@ def api_dev_afauto(id):
     try:
         return jsonify({"ok": True, "method": cam.af_auto()})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 503
+        return jsonify({"ok": False, "error": erro_curto(e)}), 503
 
 
 @app.route('/api/devices/<id>/afframe', methods=['GET'])
@@ -1129,7 +1138,7 @@ def api_dev_afframe(id):
     try:
         lv = cam.lv_info()
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 503
+        return jsonify({"ok": False, "error": erro_curto(e)}), 503
     img = lv.get("image") or {}
     frames = [{k: f.get(k) for k in ("x", "y", "width", "height", "status")}
               for f in lv.get("afframe", []) if f.get("select") == 1]

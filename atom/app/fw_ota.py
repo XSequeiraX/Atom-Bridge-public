@@ -23,6 +23,8 @@ import urllib.error
 import urllib.request
 import uuid
 
+from curto import erro
+
 AQUI = os.path.dirname(os.path.abspath(__file__))
 FW_DIR = os.path.join(AQUI, "fw")
 C3_DIR = os.path.join(FW_DIR, "c3")
@@ -49,7 +51,7 @@ def _pedido(url, data=None, ctype=None, timeout=10, method=None, headers=None):
         except ValueError:
             return e.code, {}
     except Exception as e:                  # pylint: disable=broad-except
-        return 0, {"error": str(e)}
+        return 0, {"error": erro(e)}
 
 
 def _sha(caminho):

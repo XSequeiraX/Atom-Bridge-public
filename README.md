@@ -12,7 +12,7 @@ Funciona numa consola (curses) e numa página web (telemóvel, iPad).
 | Blackmagic Pocket Cinema Camera | Bluetooth LE, pelo gateway C3 (Wi-Fi) | REC, estado completo e timecode. O Bluetooth do Atom fica como plano B |
 | BMPCC extra (`bm2`, `bm3`...) | Cada uma no seu gateway C3 | REC confirmado pela câmara, bateria e timecode. Até 8 |
 | Zoom F6 | USB-MIDI (protocolo FRC-8), de duas maneiras: **por cabo ao Atom**, ou **pelo gateway S3 dedicado** (cabo USB do F6 ao S3, que fala com o Atom por **Wi-Fi**: modo "F6 com o Atom") | REC/STOP com confirmação do próprio F6. O S3 pode também comandar o F6 sozinho, sem o Atom ("F6 autónomo", ver mais abaixo) |
-| Telemóveis com a app Blackmagic Camera: iPhones e Android (a app 3.4 ou mais nova; **testados**) | Wi-Fi, REST | Vários telemóveis como alvos de REC. O tipo no bridge continua a chamar-se `iphone`. **Testar a gravação antes de uma take a sério** (ver abaixo) |
+| Telemóveis com a app Blackmagic Camera: iPhones e Android (a app 3.4 ou mais nova; **testados**) | Wi-Fi, REST | Vários telemóveis como alvos de REC. O tipo no bridge chama-se `mobile` (`iphone`, o nome antigo, continua a valer como sinónimo; os ids `iphone1`... e o `iphones.json` ficam). **Testar a gravação antes de uma take a sério** (ver abaixo) |
 | GoPro HERO8 | Bluetooth LE, via gateway(s) ESP32-S3 | Relógio por QR (GoPro Labs). Até 4 gateways S3 (mais alcance, mais GoPro) |
 | Sony (Alpha, FX, ZV: A7 IV, FX3, A1, A9 III, ZV-E1... os modelos do Camera Remote SDK) | **Wi-Fi sem gateway** (a câmara entra no AP das câmaras, como as Canon) ou USB | REC confirmado pela câmara, bateria, cartão, ISO/íris/obturador, Time Code Preset. Pelo SDK da Sony (o ajudante já compilado vem no repositório). Ver `atom/app/sony/LEIA-ME.txt` e `AVISOS-LICENCAS.md` |
 | TC-1 (Deity) | Cabo ou Bluetooth | Leitura de LTC para o relógio do bridge |
@@ -85,7 +85,7 @@ compila sem nomes indefinidos, as regras da API, o JavaScript das páginas e que
 em cada alteração (workflow Verificar).
 
 Regras da API, em resumo: `/api/<domínio>/...` em snake_case; **cada aparelho tem um só id estável** (o tipo — `canon`,
-`iphone`, `gopro`, `bmpcc`, `bmpcc_extra`, `f6` — é um campo, nunca parte do caminho) e tudo o que é dele vive em
+`mobile`, `gopro`, `bmpcc`, `bmpcc_extra`, `f6` — é um campo, nunca parte do caminho) e tudo o que é dele vive em
 `/api/devices/<id>/<ação>` (o REC de um só aparelho é `POST /api/devices/<id>/rec`). `GET /api/devices` lista-os (`?type=` filtra),
 `POST /api/devices` com `{"type": ...}` acrescenta um, `POST /api/devices/batch` faz uma ação sobre vários (`order`, `reset`,
 `settings_polling`, `lead`); remove, restore e forget são `POST /api/devices/<id>/<ação>` (não há `DELETE`). Um id desconhecido
@@ -101,7 +101,7 @@ dá 404, uma ação que o tipo não tem dá 409. Todo o POST e todo o erro respo
 - **Dashboard**: setas escolhem a linha (câmara, F6 ou gateway); **Enter** abre só as opções dessa linha; **1-9** corre
   uma opção da barra (que passa a várias linhas se não couber); **Esc** abre o menu geral.
 - **Menu geral (Esc)**: WIZARD, DEVICES, TIME, LOGS, POWER, GLOBAL SETTINGS.
-  - **DEVICES**: iPhone, Canon (com Force Canons idle), GoPro, BMPCC extra, SONY (Add a Sony, Sony SDK and search), ZOOM (F6 screen, SD Card reader mode),
+  - **DEVICES**: MOBILE (iPhone ou Android), Canon (com Force Canons idle), GoPro, BMPCC extra, SONY (Add a Sony, Sony SDK and search), ZOOM (F6 screen, SD Card reader mode),
     gateways por USB, **WIRELESS** (Restart NetworkManager e uma entrada "Settings <rede>" por interface Wi-Fi: estado,
     aparelhos ligados e memorizados, LED, reiniciar o AP), BLUETOOTH, USB (tudo o que está ligado por USB, menos o que é
     do próprio Atom, e os controlos MIDI/HID), aparelhos guardados.

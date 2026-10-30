@@ -8,6 +8,7 @@ Do ci/verificar.py: correr(cols, linhas, cenario, teclas) -> [linhas do ecra]. N
 import fcntl
 import http.server
 import json
+import re
 import os
 import pty
 import shutil
@@ -25,6 +26,7 @@ import pyte
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CEN, POSTS, LIMPA, T0 = ["normal"], [""], [""], [0.0]
 TERMOS = [None]          # None: ja aceites; False: por aceitar (cenario "termos"); True: aceitou-se agora
+MUDOU = {"alias": {}, "name": {}}   # o que a consola mudou (alias e nomes): o simulador passa a devolve-lo, como o bridge
 
 
 def scen(c):
@@ -41,7 +43,7 @@ def scen(c):
           "rec_targets": ["bmpcc", "iphone1", "gp1"],
           "f6": {"frc": {"connected": True, "armed": [1, 2, 3], "recording": False}, "last_jam": 1}}
     dv = {"devices": [
-        {"id": "iphone1", "type": "iphone", "name": "iPhone Cabine", "connected": True, "battery": 70, "remaining_s": 5000, "enabled": True,
+        {"id": "iphone1", "type": "mobile", "name": "iPhone Cabine", "connected": True, "battery": 70, "remaining_s": 5000, "enabled": True,
          "host": "192.168.4.50", "port": 4444, "iso": 400},
         {"id": "gp1", "type": "gopro", "name": "GoPro 1", "connected": True, "battery": 55, "remaining_s": 3000, "gw": 1, "rssi": -60,
          "gateway_ok": True},
@@ -54,6 +56,9 @@ def scen(c):
          "enabled": True, "battery": 64, "remaining_s": 4200, "iso": "800", "fnumber": "2.8", "shutter": "1/50",
          "caps": {"usb": True, "lan": False, "wifi": True, "ssh": False, "label": "A7 IV"}}],
         "order": [], "alias": {"iphone1": "A-cam"}}
+    dv["alias"].update(MUDOU["alias"])
+    for d in dv["devices"]:
+        d["name"] = MUDOU["name"].get(d["id"], d["name"])
     net = {"ap_up": True, "ap_ssid": "CAM-AP", "ap_chan": 6, "ap_cams": ["iPhone Cabine", "GoPro 1"], "uplink_chan": 11}
     if c == "falhas":
         st["fault"] = True; st["fault_reason"] = "GoPro 1 link lost while recording"
@@ -97,6 +102,15 @@ class H(http.server.BaseHTTPRequestHandler):
             return self._send(200, {"ok": True, "available": True, "sdk": "0x2020000", "models": ["ILCE-7M4", "ILME-FX3"],
                                     "caps": {"ILCE-7M4": {"usb": True, "lan": False, "wifi": True, "ssh": False, "label": "A7 IV"}},
                                     "found": [{"model": "ILCE-7M4", "connection": "Network", "ip": "192.168.4.80"}]})
+        m = re.match(r"^/api/devices/([^/]+)/(alias|config)$", p)
+        if m and self.command == "POST":
+            n = int(self.headers.get("Content-Length") or 0)
+            body = json.loads(self.rfile.read(n) or b"{}")
+            if m.group(2) == "alias":
+                MUDOU["alias"][m.group(1)] = body.get("alias") or ""
+            elif body.get("name"):
+                MUDOU["name"][m.group(1)] = body["name"]
+            return self._send(200, {"ok": True})
         if p == "/api/slate/take/skip":
             open(LIMPA[0], "w").close(); open(POSTS[0], "a").write(json.dumps({"SKIP": True}) + "\n")
             return self._send(200, {"ok": True})
@@ -116,6 +130,7 @@ def correr(cols, rows, cenario="normal", teclas=(), consola=None):
     """O ecra (lista de linhas) depois de arrancar a consola no cenario e carregar nas teclas."""
     tmp = tempfile.mkdtemp(prefix="consola-sim-")
     TERMOS[0] = False if cenario == "termos" else None
+    MUDOU["alias"].clear(); MUDOU["name"].clear()
     CEN[0], POSTS[0], LIMPA[0], T0[0] = cenario, os.path.join(tmp, "posts.json"), os.path.join(tmp, "take_cleared"), time.time()
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
