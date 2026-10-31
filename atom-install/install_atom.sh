@@ -376,6 +376,22 @@ kernel.printk = 1 4 1 7
 SYSCTL
 sysctl -q -p /etc/sysctl.d/20-bridge-console.conf >/dev/null 2>&1 || dmesg -n 1 2>/dev/null || true
 echo "kernel messages hidden from the screen (journalctl -k shows them)"
+# O sysctl so vale depois de o systemd arrancar: os erros da BIOS do Toshiba no primeiro segundo ("ACPI BIOS Error (bug):
+# ... _SB.PCI0._OSC ... AE_ALREADY_EXISTS", inofensivos) apareciam no ecra a cada arranque. loglevel=3 na linha do kernel
+# esconde-os desde o inicio (ficam no dmesg). So mexe no GRUB se a linha mudou.
+if [ -d /etc/default/grub.d ] || [ -f /etc/default/grub ]; then
+    GRUBCFG=/etc/default/grub.d/20-bridge-console.cfg
+    # shellcheck disable=SC2016  # o ${...} e para o GRUB expandir, nao a shell
+    GRUBNOVO='GRUB_CMDLINE_LINUX_DEFAULT="${GRUB_CMDLINE_LINUX_DEFAULT} loglevel=3"'
+    if [ "$(cat "$GRUBCFG" 2>/dev/null)" != "$GRUBNOVO" ]; then
+        mkdir -p /etc/default/grub.d && printf '%s\n' "$GRUBNOVO" > "$GRUBCFG"
+        if command -v update-grub >/dev/null 2>&1 && update-grub >/dev/null 2>&1; then
+            echo "boot messages hidden from the screen (loglevel=3; applies from the next boot)"
+        else
+            echo "WARNING: update-grub failed: the BIOS messages still show at boot (sudo update-grub)"
+        fi
+    fi
+fi
 
 cat > /etc/systemd/system/bridge-boot-menu.service <<'EOF'
 [Unit]
